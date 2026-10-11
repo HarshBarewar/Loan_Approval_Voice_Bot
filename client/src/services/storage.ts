@@ -135,7 +135,8 @@ export function exportTranscriptAsText(item: SavedConversation) {
     `CONVERSATION TRANSCRIPT:`,
     ...item.transcript.map(t => {
       const time = new Date(t.timestamp).toLocaleTimeString();
-      const speaker = t.sender === 'customer' ? 'Customer' : t.sender === 'agent' ? 'Priya (Home Credit)' : 'System';
+      const isHindi = item.state.language === 'hi-IN';
+      const speaker = t.sender === 'customer' ? 'Customer' : t.sender === 'agent' ? (isHindi ? 'Priya (Home Credit)' : 'George (Home Credit)') : 'System';
       return `[${time}] ${speaker}: ${t.text}`;
     }),
     `=======================================================`

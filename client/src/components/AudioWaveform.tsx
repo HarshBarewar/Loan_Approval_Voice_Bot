@@ -18,7 +18,7 @@ export const AudioWaveform: React.FC<AudioWaveformProps> = ({
 
   return (
     <div className="flex items-center space-x-1 h-8 px-2 select-none" title={
-      isListening ? 'Microphone listening...' : isSpeaking ? 'Priya speaking...' : 'Voice engine idle'
+      isListening ? 'Microphone listening...' : isSpeaking ? 'Agent speaking...' : 'Voice engine idle'
     }>
       {Array.from({ length: bars }).map((_, i) => {
         // Compute pseudo height or audio-reactive height

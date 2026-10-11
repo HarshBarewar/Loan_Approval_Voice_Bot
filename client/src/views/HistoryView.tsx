@@ -80,8 +80,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ conversations, onRefre
 
   const handleCopyTranscript = () => {
     if (!selectedConv) return;
+    const isHindi = selectedConv.state.language === 'hi-IN';
+    const agentLabel = isHindi ? 'Priya (Home Credit)' : 'George (Home Credit)';
     const text = selectedConv.transcript
-      .map(m => `[${new Date(m.timestamp).toLocaleTimeString()}] ${m.sender === 'agent' ? 'Priya (Home Credit)' : 'Customer'}: ${m.text}`)
+      .map(m => `[${new Date(m.timestamp).toLocaleTimeString()}] ${m.sender === 'agent' ? agentLabel : 'Customer'}: ${m.text}`)
       .join('\n');
     navigator.clipboard.writeText(text);
     setCopiedTranscript(true);
@@ -359,7 +361,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ conversations, onRefre
                     <div className="flex items-center justify-between text-[10px]">
                       <div className="flex items-center space-x-2">
                         <span className={`font-bold ${msg.sender === 'agent' ? 'text-red-700' : 'text-blue-700'}`}>
-                          {msg.sender === 'agent' ? 'Priya (Home Credit)' : msg.sender === 'customer' ? 'Customer' : 'System'}
+                          {msg.sender === 'agent' ? (selectedConv?.state.language === 'hi-IN' ? 'Priya (Home Credit)' : 'George (Home Credit)') : msg.sender === 'customer' ? 'Customer' : 'System'}
                         </span>
                         <span className="text-slate-400">
                           {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}

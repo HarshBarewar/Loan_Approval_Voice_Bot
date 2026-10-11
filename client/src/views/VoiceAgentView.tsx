@@ -123,7 +123,7 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
       speechRec.stopListening();
 
       const customerName = selectedLanguage === 'hi-IN' ? 'श्री शर्मा' : 'Mr. Sharma';
-      const agentName = selectedLanguage === 'hi-IN' ? 'प्रिया (होम क्रेडिट)' : 'Priya (Home Credit)';
+      const agentName = selectedLanguage === 'hi-IN' ? 'प्रिया (होम क्रेडिट)' : 'George (Home Credit)';
       const session = await api.createConversation(customerName, agentName, selectedLanguage);
       setConversationId(session.conversationId);
       setState(session.state);
@@ -245,8 +245,9 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
         try {
           setIsProcessing(true);
           setErrorBanner(null);
-          speechSynth.stop();
-          const session = await api.createConversation('Mr. Sharma', 'Priya (Home Credit)');
+          const custName = selectedLanguage === 'hi-IN' ? 'श्री शर्मा' : 'Mr. Sharma';
+          const agName = selectedLanguage === 'hi-IN' ? 'प्रिया (होम क्रेडिट)' : 'George (Home Credit)';
+          const session = await api.createConversation(custName, agName, selectedLanguage);
           setConversationId(session.conversationId);
           activeId = session.conversationId;
           setState(session.state);
@@ -292,14 +293,15 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
       `Conversation ID: ${conversationId || 'N/A'}\n` +
       `Date: ${new Date().toLocaleString()}\n` +
       `Customer: ${state?.customerName || 'N/A'}\n` +
-      `Agent: ${state?.agentName || 'Priya (Home Credit)'}\n` +
+      `Agent: ${state?.agentName || (selectedLanguage === 'hi-IN' ? 'Priya (Home Credit)' : 'George (Home Credit)')}\n` +
       `Language: ${selectedLanguage === 'hi-IN' ? 'Hindi (hi-IN)' : 'English (en-IN)'}\n` +
       `Eligibility Status: ${state?.overallEligibility || 'PENDING'}\n` +
       `Final Outcome: ${state?.finalOutcome || 'IN_PROGRESS'}\n` +
       `Turn Count: ${state?.turnCount || transcript.length}\n` +
       `================================================================================\n\n`;
 
-    const body = transcript.map(m => `[${new Date(m.timestamp).toLocaleTimeString()}] ${m.sender === 'agent' ? 'Priya (Home Credit)' : 'Customer'}: ${m.text}`).join('\n\n');
+    const currentAgentLabel = selectedLanguage === 'hi-IN' ? 'Priya (Home Credit)' : 'George (Home Credit)';
+    const body = transcript.map(m => `[${new Date(m.timestamp).toLocaleTimeString()}] ${m.sender === 'agent' ? currentAgentLabel : 'Customer'}: ${m.text}`).join('\n\n');
     const blob = new Blob([header + body], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -400,8 +402,10 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
               </div>
               <div>
                 <div className="flex items-center space-x-2">
-                  <span className="font-bold text-slate-800 text-sm">Priya — Home Credit LAP Agent</span>
-                  <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-slate-200 text-slate-700">
+                  <span className="font-bold text-slate-800 text-sm whitespace-nowrap">
+                    {selectedLanguage === 'hi-IN' ? 'Priya — Home Credit LAP Agent' : 'George — Home Credit LAP Agent'}
+                  </span>
+                  <span className="text-[10px] px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-slate-200 text-slate-700 whitespace-nowrap shrink-0">
                     {state?.stage ? state.stage.replace(/_/g, ' ') : 'IDLE'}
                   </span>
                 </div>
@@ -563,7 +567,7 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                       >
                         <div className="flex items-center justify-between space-x-4 mb-1">
                           <span className={`text-[11px] font-semibold ${isAgent ? 'text-red-700' : 'text-blue-100'}`}>
-                            {isAgent ? 'Priya (Home Credit)' : 'Customer (You)'}
+                            {isAgent ? (selectedLanguage === 'hi-IN' ? 'Priya (Home Credit)' : 'George (Home Credit)') : 'Customer (You)'}
                           </span>
                           <div className="flex items-center space-x-1.5">
                             <span className={`text-[10px] ${isAgent ? 'text-slate-400' : 'text-blue-200'}`}>

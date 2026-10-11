@@ -84,14 +84,18 @@ export function createApiRouter(
     const state = StateMachine.createInitialState(
       conversationId,
       customerName || (selectedLang === 'hi-IN' ? 'श्री शर्मा' : 'Mr. Sharma'),
-      agentName || (selectedLang === 'hi-IN' ? 'प्रिया (होम क्रेडिट)' : 'Priya (Home Credit)'),
+      agentName || (selectedLang === 'hi-IN' ? 'प्रिया (होम क्रेडिट)' : 'George (Home Credit)'),
       selectedLang
     );
 
-    // Initial Greeting Message from Agent (Localized)
+    // Initial Greeting Message from Agent (Localized: George for English, Priya for Hindi)
+    const englishAgentIntro = state.agentName.includes('(') 
+      ? state.agentName.replace(' (Home Credit)', ' from Home Credit')
+      : state.agentName;
+
     const initialGreeting = selectedLang === 'hi-IN'
       ? `नमस्ते! क्या मेरी बात संपत्ति के मालिक से हो रही है? मैं होम क्रेडिट से प्रिया बोल रही हूँ, आपके ₹75 लाख तक के प्री-अप्रूव्ड लोन अगेंस्ट प्रॉपर्टी ऑफर के संबंध में। क्या आपके पास बात करने के लिए दो मिनट का समय है?`
-      : `Hello! Am I speaking with the property owner? This is ${state.agentName} regarding your pre-approved Home Credit Loan Against Property offer of up to ₹75 Lakhs. Do you have a moment?`;
+      : `Hello! Am I speaking with the property owner? This is ${englishAgentIntro} regarding your pre-approved Home Credit Loan Against Property offer of up to ₹75 Lakhs. Do you have a moment?`;
 
     const initialAgentMsg: TranscriptMessage = {
       id: `msg-${Date.now()}-init`,
