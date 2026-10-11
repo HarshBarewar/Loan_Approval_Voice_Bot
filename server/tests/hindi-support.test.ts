@@ -11,7 +11,7 @@ import { NLPExtractor } from '../src/engine/nlp-extractor.js';
 import { ConversationOrchestrator } from '../src/engine/conversation-orchestrator.js';
 import { StateMachine } from '../src/engine/state-machine.js';
 import { OpenRouterService } from '../src/services/openrouter.js';
-import { ConversationStage, FinalOutcome, PropertyType } from '../src/types.js';
+import { ConversationStage, FinalOutcome, PropertyType, OwnershipStatus } from '../src/types.js';
 
 describe('Hindi Language Voice Agent Support', () => {
   it('1. POST /api/conversations with language hi-IN returns Devanagari Hindi greeting', async () => {
@@ -134,5 +134,68 @@ describe('Hindi Language Voice Agent Support', () => {
     expect(turn1.finalOutcome).toBe(FinalOutcome.QUALIFIED_FOR_HUMAN_HANDOFF);
     expect(turn1.assistantResponse).toMatch(/[\u0900-\u097F]/);
     expect(turn1.assistantResponse).toContain('बधाई हो');
+  });
+
+  it('7. Answering "नहीं" when asked about original documents immediately disqualifies', async () => {
+    const orchestrator = new ConversationOrchestrator(new OpenRouterService());
+    let state = StateMachine.createInitialState('hindi-conv-5', 'श्री शर्मा', 'प्रिया', 'hi-IN');
+    // Set propertyType and ownershipStatus so next question is original documents
+    state = StateMachine.applyFacts(state, {
+      propertyType: PropertyType.RESIDENTIAL,
+      ownershipStatus: OwnershipStatus.SOLE
+    });
+    state = StateMachine.transition(state);
+    expect(state.nextMissingQuestion).toContain('मूल दस्तावेज़');
+
+    const turn = await orchestrator.processMessage(state, [], 'नहीं', true);
+
+    expect(turn.checklist.originalDocuments.value).toBe(false);
+    expect(turn.stage).toBe(ConversationStage.DISQUALIFIED);
+    expect(turn.finalOutcome).toBe(FinalOutcome.DISQUALIFIED);
+    expect(turn.assistantResponse).toContain('मूल दस्तावेज़');
+  });
+
+  it('8. Answering "नहीं उपलब्ध नहीं है" or "नहीं उसे पर" disqualifies with Hindi explanation', async () => {
+    const orchestrator = new ConversationOrchestrator(new OpenRouterService());
+    let state = StateMachine.createInitialState('hindi-conv-6', 'श्री शर्मा', 'प्रिया', 'hi-IN');
+    state = StateMachine.applyFacts(state, {
+      propertyType: PropertyType.RESIDENTIAL,
+      ownershipStatus: 'SOLE' as any
+    });
+
+    const turn1 = await orchestrator.processMessage(state, [], 'नहीं उपलब्ध नहीं है', true);
+    expect(turn1.checklist.originalDocuments.value).toBe(false);
+    expect(turn1.stage).toBe(ConversationStage.DISQUALIFIED);
+
+    const turn2 = await orchestrator.processMessage(state, [], 'नहीं उसे पर', true);
+    expect(turn2.checklist.originalDocuments.value).toBe(false);
+    expect(turn2.stage).toBe(ConversationStage.DISQUALIFIED);
+  });
+
+  it('9. "मूल दस्तावेज उपलब्ध नहीं है" is recognized as missing documents (never true)', async () => {
+    const orchestrator = new ConversationOrchestrator(new OpenRouterService());
+    let state = StateMachine.createInitialState('hindi-conv-7', 'श्री शर्मा', 'प्रिया', 'hi-IN');
+    state = StateMachine.applyFacts(state, {
+      propertyType: PropertyType.RESIDENTIAL,
+      ownershipStatus: 'SOLE' as any
+    });
+
+    const turn = await orchestrator.processMessage(state, [], 'मूल दस्तावेज उपलब्ध नहीं है', true);
+    expect(turn.checklist.originalDocuments.value).toBe(false);
+    expect(turn.stage).toBe(ConversationStage.DISQUALIFIED);
+  });
+
+  it('10. Answering "हाँ" or "उपलब्ध हैं" captures documents and advances to loan amount', async () => {
+    const orchestrator = new ConversationOrchestrator(new OpenRouterService());
+    let state = StateMachine.createInitialState('hindi-conv-8', 'श्री शर्मा', 'प्रिया', 'hi-IN');
+    state = StateMachine.applyFacts(state, {
+      propertyType: PropertyType.RESIDENTIAL,
+      ownershipStatus: 'SOLE' as any
+    });
+
+    const turn = await orchestrator.processMessage(state, [], 'हाँ, उपलब्ध हैं', true);
+    expect(turn.checklist.originalDocuments.value).toBe(true);
+    expect(turn.stage).not.toBe(ConversationStage.DISQUALIFIED);
+    expect(turn.assistantResponse).toContain('लोन');
   });
 });

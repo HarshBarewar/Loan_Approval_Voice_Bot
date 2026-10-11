@@ -9,7 +9,9 @@ import {
   ConversationStage,
   ConversationState,
   FinalOutcome,
+  IncomeMode,
   ProcessMessageResponse,
+  PropertyType,
   TranscriptMessage
 } from '../types.js';
 import { NLPExtractor } from './nlp-extractor.js';
@@ -143,16 +145,22 @@ export class ConversationOrchestrator {
         usedLLM = true;
         llmModelName = config.model;
 
-        // Merge facts safely, prioritizing validated non-null fields
+        // Merge facts safely, prioritizing validated non-null fields while protecting disqualification guardrails
         if (llmResult.facts) {
           mergedFacts = {
             ...mergedFacts,
-            ...(llmResult.facts.propertyType && { propertyType: llmResult.facts.propertyType }),
+            ...(llmResult.facts.propertyType && {
+              propertyType: ruleExtractedFacts.propertyType === PropertyType.AGRICULTURAL ? PropertyType.AGRICULTURAL : (llmResult.facts.propertyType as PropertyType)
+            }),
             ...(llmResult.facts.ownershipStatus && { ownershipStatus: llmResult.facts.ownershipStatus }),
-            ...(llmResult.facts.originalDocuments !== undefined && llmResult.facts.originalDocuments !== null && { originalDocuments: llmResult.facts.originalDocuments }),
+            ...(llmResult.facts.originalDocuments !== undefined && llmResult.facts.originalDocuments !== null && {
+              originalDocuments: ruleExtractedFacts.originalDocuments === false ? false : llmResult.facts.originalDocuments
+            }),
             ...(llmResult.facts.loanAmountInr && { loanAmountInr: llmResult.facts.loanAmountInr }),
             ...(llmResult.facts.occupation && { occupation: llmResult.facts.occupation }),
-            ...(llmResult.facts.incomeMode && { incomeMode: llmResult.facts.incomeMode }),
+            ...(llmResult.facts.incomeMode && {
+              incomeMode: ruleExtractedFacts.incomeMode === IncomeMode.CASH ? IncomeMode.CASH : (llmResult.facts.incomeMode as IncomeMode)
+            }),
             ...(llmResult.facts.marketValueInr && { marketValueInr: llmResult.facts.marketValueInr }),
             ...(llmResult.facts.tenureYears && { tenureYears: llmResult.facts.tenureYears }),
             ...(llmResult.facts.existingPropertyLoan !== undefined && llmResult.facts.existingPropertyLoan !== null && { existingPropertyLoan: llmResult.facts.existingPropertyLoan }),

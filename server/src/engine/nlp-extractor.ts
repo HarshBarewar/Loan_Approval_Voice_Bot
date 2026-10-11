@@ -126,7 +126,9 @@ export class NLPExtractor {
     const facts: ExtractedFacts = {};
 
     // 1. Property Type
-    if (/(?:agricultur(?:al|e)|farm(?:land)?|कृषि|खेती|खेत|फार्मलैंड)/i.test(clean)) {
+    const isAgriculturalNegated = /(?:नहीं|not|no)\s*(?:कृषि|खेती|खेत|फार्मलैंड|agricultur)/i.test(clean) ||
+                                  /(?:कृषि|खेती|खेत|फार्मलैंड|agricultur)\s*(?:नहीं|not)/i.test(clean);
+    if (!isAgriculturalNegated && /(?:agricultur(?:al|e)|farm(?:land)?|कृषि|खेती|खेत|फार्मलैंड)/i.test(clean)) {
       facts.propertyType = PropertyType.AGRICULTURAL;
     } else if (/(?:residential|house|flat|apartment|villa|home|आवासीय|रेजिडेंशियल|मकान|घर|फ्लैट)/i.test(clean)) {
       facts.propertyType = PropertyType.RESIDENTIAL;
@@ -139,16 +141,46 @@ export class NLPExtractor {
     // 2. Ownership Status
     if (/(?:joint(?:ly)?|co-own(?:ed)?|with my (?:wife|husband|spouse|brother|father|mother|family)|shared|संयुक्त|जॉइंट|पत्नी के साथ|परिवार|साझा)/i.test(clean)) {
       facts.ownershipStatus = OwnershipStatus.JOINT;
-    } else if (/(?:sole(?:ly)?|single|myself|only me|my own|individual|खुद का|केवल मेरे|अकेला|एकल|मेरे नाम)/i.test(clean)) {
+    } else if (/(?:sole(?:ly)?|single|myself|only me|my own|individual|खुद का|केवल मेरे|अकेला|एकल|मेरे नाम|मेरे ही नाम|सिर्फ मेरे)/i.test(clean)) {
       facts.ownershipStatus = OwnershipStatus.SOLE;
     }
 
     // 3. Original Property Documents
-    if (/(?:only copies|photocop(?:y|ies)|xerox|copies only|duplicates? only|lost|don't have original|no original|सिर्फ फोटोकॉपी|फोटोकॉपी|ज़ेरॉक्स|मूल नहीं|खो गए|केवल कॉपी)/i.test(clean)) {
+    // Determine if the conversation is currently waiting for original document verification
+    const isAskingDocuments = Boolean(
+      (contextState?.checklist?.originalDocuments?.value === null &&
+       (contextState?.checklist?.propertyType?.value !== null ||
+        contextState?.checklist?.ownershipStatus?.value !== null)) ||
+      (contextState?.nextMissingQuestion &&
+       /(?:मूल दस्तावेज़|ओरिजिनल पेपर्स|दस्तावेज़|कागज़ात|पेपर्स|original.*deeds|original.*documents|title deeds|original.*papers)/i.test(contextState.nextMissingQuestion))
+    );
+
+    // Negative indicators for document availability
+    const hasDocNegativeKeywords =
+      /(?:उपलब्ध\s*नहीं|नहीं\s*उपलब्ध|दस्तावेज़\s*नहीं|दस्तावेज\s*नहीं|कागज़ात\s*नहीं|कागजात\s*नहीं|पेपर्स\s*नहीं|ओरिजिनल\s*नहीं|मूल\s*नहीं|पास\s*नहीं|नहीं\s*हैं?|नहीं\s*उसे?|नहीं\s*उस\s*पर|उसे\s*पर\s*नहीं|नाहीं?|not\s*available|unavailable|don'?t\s*have|do\s*not\s*have|no\s*original|original.*not|deeds.*not|without\s*original)/i.test(clean) ||
+      /(?:only copies|photocop(?:y|ies)|xerox|copies only|duplicates? only|lost|सिर्फ फोटोकॉपी|केवल फोटोकॉपी|फोटोकॉपी ही|फोटोकॉपी|ज़ेरॉक्स|ज़ीरॉक्स|खो गए|गुम हो गए|केवल कॉपी|बैंक में गिरवी|बैंक के पास)/i.test(clean);
+
+    // Explicit "No" response when asked about original documents
+    const isExplicitNoInDocContext =
+      isAskingDocuments &&
+      /(?:^|[\s,.;!?])(?:नहीं|ना|नाही|नो|जी नहीं|नहीं जी|उसे पर नहीं|नहीं उस पर|no|nope|nah|not really)(?:$|[\s,.;!?])/i.test(clean);
+
+    if (
+      // Case A: Standalone negative statement about documents or lack of originals
+      (hasDocNegativeKeywords && /(?:original|deeds|documents?|papers?|title|मूल|ओरिजिनल|दस्तावेज़|दस्तावेज|कागज़ात|कागजात|पेपर्स)/i.test(clean)) ||
+      // Case B: Copies / xerox / lost / bank pledged
+      /(?:only copies|photocop(?:y|ies)|xerox|copies only|duplicates? only|lost|सिर्फ फोटोकॉपी|केवल फोटोकॉपी|फोटोकॉपी|ज़ेरॉक्स|खो गए|गुम हो गए|केवल कॉपी)/i.test(clean) ||
+      // Case C: When agent asked about documents, customer says "नहीं", "नहीं उपलब्ध नहीं है", "नहीं उस पर", "no", etc.
+      (isAskingDocuments && (hasDocNegativeKeywords || isExplicitNoInDocContext))
+    ) {
       facts.originalDocuments = false;
     } else if (
-      /(?:yes|original(?:s)?\s+(?:deeds|documents|papers|title deeds)?\s*(?:are\s+)?(?:available|with me|at home|ready)|in (?:the )?(?:locker|safe)|papers at home|deeds at home|have the original|deeds are available|documents are available|मूल दस्तावेज़|ओरिजिनल पेपर्स|उपलब्ध हैं|घर पर हैं|लॉकर में हैं|कागज़ात हैं)/i.test(clean) ||
-      (/(?:original|मूल)/i.test(clean) && /(?:available|ready|with me|at home|in locker|उपलब्ध|पास|घर)/i.test(clean))
+      // Positive document indicators (MUST NOT have document negation or context "No"!)
+      !hasDocNegativeKeywords && !isExplicitNoInDocContext && (
+        /(?:original(?:s)?\s+(?:deeds|documents|papers|title deeds)?\s*(?:are\s+)?(?:available|with me|at home|ready)|in (?:the )?(?:locker|safe)|papers at home|deeds at home|have the original|deeds are available|documents are available|मूल दस्तावेज़|मूल दस्तावेज|ओरिजिनल पेपर्स|कागज़ात हैं|दस्तावेज़ हैं)/i.test(clean) ||
+        (/(?:original|मूल|ओरिजिनल)/i.test(clean) && /(?:available|ready|with me|at home|in locker|उपलब्ध|पास|घर|लॉकर)/i.test(clean)) ||
+        (isAskingDocuments && /(?:^|[\s,.;!?])(?:हाँ|हां|जी हाँ|जी हां|हाँ जी|बिल्कुल|उपलब्ध हैं|उपलब्ध है|हैं|yes|yeah|yep|sure|available|ready|i have them|have them)(?:$|[\s,.;!?])/i.test(clean))
+      )
     ) {
       facts.originalDocuments = true;
     }
@@ -160,7 +192,9 @@ export class NLPExtractor {
       facts.occupation = OccupationType.SELF_EMPLOYED;
     }
 
-    if (/(?:cash(?:-in-hand| in hand)?|by cash|in cash|नकद|कैश|हाथ में)/i.test(clean)) {
+    const hasCashKeywords = /(?:cash(?:-in-hand| in hand)?|by cash|in cash|नकद|कैश|हाथ में)/i.test(clean) ||
+                            /(?:बैंक में नहीं|खाते में नहीं|अकाउंट में नहीं|not in bank|not via bank)/i.test(clean);
+    if (hasCashKeywords) {
       facts.incomeMode = IncomeMode.CASH;
     } else if (/(?:bank(?:ing)?|account|online transfer|direct deposit|neft|cheque|credited|बैंक|अकाउंट|खाता|बैंक ट्रांसफर|खाते में)/i.test(clean)) {
       facts.incomeMode = IncomeMode.BANK;
@@ -191,9 +225,20 @@ export class NLPExtractor {
     }
 
     // 8. ₹75 Lakhs Cap Alternative Agreement
-    if (/(?:yes proceed with (?:75|75 lakh)|okay with 75|agree to 75|fine with 75|75 lakh is fine|75 is okay|yes 75 lakh|75 लाख ठीक है|75 लाख चलेगा|75 लाख मंजूर|हाँ 75 लाख|हां 75 लाख)/i.test(clean)) {
+    const isAskingLoanCap = Boolean(
+      contextState?.maxAmountCapOffered === true &&
+      contextState?.maxAmountCapAccepted === null
+    );
+
+    if (
+      /(?:yes proceed with (?:75|75 lakh)|okay with 75|agree to 75|fine with 75|75 lakh is fine|75 is okay|yes 75 lakh|75 लाख ठीक है|75 लाख चलेगा|75 लाख मंजूर|हाँ 75 लाख|हां 75 लाख)/i.test(clean) ||
+      (isAskingLoanCap && /(?:^|[\s,.;!?])(?:हाँ|हां|जी हाँ|ठीक है|चलेगा|मंजूर|yes|yeah|sure|okay|fine)(?:$|[\s,.;!?])/i.test(clean))
+    ) {
       facts.maxAmountAccepted = true;
-    } else if (/(?:no 75 is not enough|need more than 75|cannot proceed with 75|decline 75|not interested with 75|75 लाख कम है|नहीं 75 लाख|75 लाख नहीं चाहिए)/i.test(clean)) {
+    } else if (
+      /(?:no 75 is not enough|need more than 75|cannot proceed with 75|decline 75|not interested with 75|75 लाख कम है|नहीं 75 लाख|75 लाख नहीं चाहिए)/i.test(clean) ||
+      (isAskingLoanCap && /(?:^|[\s,.;!?])(?:नहीं|ना|नाही|नो|कम है|नहीं चलेगा|no|nope|nah|not enough)(?:$|[\s,.;!?])/i.test(clean))
+    ) {
       facts.maxAmountAccepted = false;
     }
 

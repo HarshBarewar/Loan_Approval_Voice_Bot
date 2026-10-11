@@ -700,6 +700,14 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                   </button>
                   <button
                     type="button"
+                    onClick={() => { setCustomerInput('नहीं, मूल दस्तावेज़ उपलब्ध नहीं हैं'); }}
+                    className="px-2 py-0.5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors cursor-pointer"
+                    title="Disqualification test for missing original documents"
+                  >
+                    दस्तावेज़ नहीं हैं (Nahi)
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => { setCustomerInput('नौकरीपेशा हूँ, वेतन बैंक खाते में आता है'); }}
                     className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
                   >
@@ -744,6 +752,14 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                     className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
                   >
                     Original docs available
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerInput('No, original documents are not available'); }}
+                    className="px-2 py-0.5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors cursor-pointer"
+                    title="Disqualification test for missing original documents"
+                  >
+                    No original docs
                   </button>
                   <button
                     type="button"

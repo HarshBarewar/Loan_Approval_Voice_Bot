@@ -275,6 +275,14 @@ CRITICAL RULES:
 3. If customer corrects an answer, extract the new value.
 4. conversationalResponse must be concise (1 to 2 sentences max) suitable for text-to-speech vocalization.
 5. Do not invent interest rates or loan approvals.
+6. When asked about Original Property Documents:
+   - If customer says "नहीं", "नहीं है", "उपलब्ध नहीं है", "नहीं उपलब्ध नहीं है", "नहीं उस पर", "no", "not available", "don't have", "only photocopies", "xerox", "lost":
+     You MUST set "facts.originalDocuments": false.
+   - If customer says "हाँ", "हां", "जी हाँ", "उपलब्ध हैं", "yes", "available", "have them":
+     You MUST set "facts.originalDocuments": true.
+7. If customer has requested > 75L and is asked if they accept ₹75 Lakhs:
+   - "हाँ" / "yes" / "ठीक है" -> "facts.maxAmountAccepted": true.
+   - "नहीं" / "no" / "कम है" -> "facts.maxAmountAccepted": false.
 ${languageInstruction}
 `;
 
