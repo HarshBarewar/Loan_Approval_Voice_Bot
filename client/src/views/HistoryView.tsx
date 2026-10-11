@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   History,
   Download,
@@ -11,7 +11,11 @@ import {
   ArrowRightLeft,
   ChevronRight,
   Sparkles,
-  AlertTriangle
+  AlertTriangle,
+  Search,
+  Copy,
+  Check,
+  Volume2
 } from 'lucide-react';
 import { SavedConversation } from '../types';
 import {
@@ -20,6 +24,7 @@ import {
   exportConversationAsJSON,
   exportTranscriptAsText
 } from '../services/storage';
+import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
 
 interface HistoryViewProps {
   conversations: SavedConversation[];
@@ -29,11 +34,22 @@ interface HistoryViewProps {
 export const HistoryView: React.FC<HistoryViewProps> = ({ conversations, onRefresh }) => {
   const [filterOutcome, setFilterOutcome] = useState<string>('ALL');
   const [selectedConv, setSelectedConv] = useState<SavedConversation | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [copiedTranscript, setCopiedTranscript] = useState<boolean>(false);
 
-  const filtered = conversations.filter(c => {
-    if (filterOutcome === 'ALL') return true;
-    return c.state.finalOutcome === filterOutcome;
-  });
+  const speechSynth = useSpeechSynthesis();
+
+  const filtered = useMemo(() => {
+    return conversations.filter(c => {
+      const matchesOutcome = filterOutcome === 'ALL' || c.state.finalOutcome === filterOutcome;
+      const q = searchQuery.toLowerCase().trim();
+      const matchesSearch = !q ||
+        c.customerName.toLowerCase().includes(q) ||
+        c.id.toLowerCase().includes(q) ||
+        c.transcript.some(t => t.text.toLowerCase().includes(q));
+      return matchesOutcome && matchesSearch;
+    });
+  }, [conversations, filterOutcome, searchQuery]);
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -52,6 +68,26 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ conversations, onRefre
     }
   };
 
+  const handleExportAllJSON = () => {
+    const blob = new Blob([JSON.stringify(conversations, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `home-credit-all-conversations-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyTranscript = () => {
+    if (!selectedConv) return;
+    const text = selectedConv.transcript
+      .map(m => `[${new Date(m.timestamp).toLocaleTimeString()}] ${m.sender === 'agent' ? 'Priya (Home Credit)' : 'Customer'}: ${m.text}`)
+      .join('\n');
+    navigator.clipboard.writeText(text);
+    setCopiedTranscript(true);
+    setTimeout(() => setCopiedTranscript(false), 2000);
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header & Actions */}
@@ -59,42 +95,68 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ conversations, onRefre
         <div>
           <div className="flex items-center space-x-2">
             <History className="w-5 h-5 text-red-600" />
-            <h1 className="text-xl font-bold text-slate-900">Conversation History</h1>
+            <h1 className="text-xl font-bold text-slate-900">Conversation History & Audit</h1>
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            Local browser demo history. Inspect transcripts, audit captured eligibility fields, and export records as JSON or text.
+            Local browser conversation logs. Inspect transcripts, audit captured eligibility fields, listen to speech playback, and export records as JSON or text.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           {conversations.length > 0 && (
-            <button
-              onClick={handleClearAll}
-              className="px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Clear All Records</span>
-            </button>
+            <>
+              <button
+                onClick={handleExportAllJSON}
+                className="px-3.5 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-colors shadow-2xs cursor-pointer"
+                title="Download all records as JSON"
+              >
+                <Download className="w-3.5 h-3.5 text-slate-500" />
+                <span>Export All ({conversations.length})</span>
+              </button>
+              <button
+                onClick={handleClearAll}
+                className="px-3.5 py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear All Records</span>
+              </button>
+            </>
           )}
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="flex items-center space-x-2 overflow-x-auto pb-1 text-xs">
-        <span className="text-slate-400 font-semibold uppercase text-[10px] pl-1">Filter:</span>
-        {['ALL', 'QUALIFIED_FOR_HUMAN_HANDOFF', 'DISQUALIFIED', 'LOAN_TRANSFER_SPECIALIST_REQUIRED', 'CALLBACK_REQUESTED', 'DECLINED', 'INCOMPLETE'].map(outcome => (
-          <button
-            key={outcome}
-            onClick={() => setFilterOutcome(outcome)}
-            className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors cursor-pointer ${
-              filterOutcome === outcome
-                ? 'bg-slate-900 text-white font-semibold'
-                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-            }`}
-          >
-            {outcome === 'ALL' ? 'All Records' : outcome.replace(/_/g, ' ')}
-          </button>
-        ))}
+      {/* Filter and Search Bar */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Filter Tabs */}
+          <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-xs">
+            {['ALL', 'QUALIFIED_FOR_HUMAN_HANDOFF', 'DISQUALIFIED', 'LOAN_TRANSFER_SPECIALIST_REQUIRED', 'CALLBACK_REQUESTED', 'DECLINED', 'INCOMPLETE'].map(outcome => (
+              <button
+                key={outcome}
+                onClick={() => setFilterOutcome(outcome)}
+                className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                  filterOutcome === outcome
+                    ? 'bg-slate-900 text-white font-semibold'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100'
+                }`}
+              >
+                {outcome === 'ALL' ? 'All Records' : outcome.replace(/_/g, ' ')}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Box */}
+          <div className="relative min-w-[220px]">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search conversations..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-red-500 bg-slate-50 focus:bg-white"
+            />
+          </div>
+        </div>
       </div>
 
       {/* List and Inspector Layout */}
@@ -108,7 +170,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ conversations, onRefre
               <p className="text-xs text-slate-400 max-w-sm mx-auto">
                 {conversations.length === 0
                   ? 'Run a conversation in the Voice Agent workspace or execute test scenarios to generate history.'
-                  : 'No conversations match the selected outcome filter.'}
+                  : 'No conversations match the selected outcome filter or search keywords.'}
               </p>
             </div>
           ) : (
@@ -214,6 +276,14 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ conversations, onRefre
 
               <div className="flex items-center space-x-2">
                 <button
+                  onClick={handleCopyTranscript}
+                  className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center space-x-1.5 shadow-2xs transition-all cursor-pointer"
+                  title="Copy complete transcript to clipboard"
+                >
+                  {copiedTranscript ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+                  <span>{copiedTranscript ? 'Copied' : 'Copy'}</span>
+                </button>
+                <button
                   onClick={() => exportConversationAsJSON(selectedConv)}
                   className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs flex items-center space-x-1 shadow-2xs cursor-pointer"
                 >
@@ -285,16 +355,25 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ conversations, onRefre
               </h3>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 max-h-72 overflow-y-auto space-y-3 text-xs">
                 {selectedConv.transcript.map((msg) => (
-                  <div key={msg.id} className="space-y-0.5">
-                    <div className="flex items-center space-x-2 text-[10px]">
-                      <span className={`font-bold ${msg.sender === 'agent' ? 'text-red-700' : 'text-blue-700'}`}>
-                        {msg.sender === 'agent' ? 'Priya (Home Credit)' : msg.sender === 'customer' ? 'Customer' : 'System'}
-                      </span>
-                      <span className="text-slate-400">
-                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                      </span>
+                  <div key={msg.id} className="space-y-1 bg-white p-2.5 rounded-lg border border-slate-100 shadow-2xs">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <div className="flex items-center space-x-2">
+                        <span className={`font-bold ${msg.sender === 'agent' ? 'text-red-700' : 'text-blue-700'}`}>
+                          {msg.sender === 'agent' ? 'Priya (Home Credit)' : msg.sender === 'customer' ? 'Customer' : 'System'}
+                        </span>
+                        <span className="text-slate-400">
+                          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => speechSynth.speak(msg.text)}
+                        className="p-1 text-slate-400 hover:text-red-600 rounded hover:bg-slate-50 cursor-pointer"
+                        title="Play audio"
+                      >
+                        <Volume2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <p className="text-slate-800 pl-2 bg-white p-2 rounded-lg border border-slate-100 leading-relaxed">
+                    <p className="text-slate-800 pl-1 leading-relaxed">
                       {msg.text}
                     </p>
                   </div>

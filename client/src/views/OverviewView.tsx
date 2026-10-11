@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   Mic,
   ShieldCheck,
@@ -10,9 +9,14 @@ import {
   Bot,
   AlertTriangle,
   ArrowRight,
-  ExternalLink
+  ExternalLink,
+  Sparkles,
+  Layers,
+  FileCheck2,
+  PhoneCall
 } from 'lucide-react';
 import { SavedConversation } from '../types';
+import { ArchitectureFlow } from '../components/ArchitectureFlow';
 
 interface OverviewViewProps {
   conversations: SavedConversation[];
@@ -138,6 +142,108 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
           </p>
         </div>
       </div>
+
+      {/* 4 Guided Fast-Track Scenario Demos */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Guided Qualification Flow Demos</h2>
+            <p className="text-xs text-slate-500">Test the four cornerstone business rule outcomes with 1-click execution</p>
+          </div>
+          <button
+            onClick={() => onNavigateTab('scenarios')}
+            className="text-xs font-semibold text-red-600 hover:text-red-700 flex items-center space-x-1 cursor-pointer"
+          >
+            <span>View All 16 Test Cases</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* Card 1: Eligible */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between space-y-3 border-t-4 border-t-emerald-500">
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Eligible Outcome
+              </span>
+              <h3 className="font-bold text-slate-900 text-sm">Full LAP Qualification</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Residential property, sole owner, original deeds, ₹50L loan, salaried bank income, 10-year tenure.
+              </p>
+            </div>
+            <button
+              onClick={onStartCall}
+              className="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+            >
+              <PhoneCall className="w-3.5 h-3.5" />
+              <span>Launch Live Call</span>
+            </button>
+          </div>
+
+          {/* Card 2: Agricultural Disqualification */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between space-y-3 border-t-4 border-t-rose-500">
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                Disqualification Trigger
+              </span>
+              <h3 className="font-bold text-slate-900 text-sm">Agricultural Land</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Customer owns agricultural farmland. Immediately disqualified politely per policy without wasting time.
+              </p>
+            </div>
+            <button
+              onClick={onStartCall}
+              className="w-full py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+            >
+              <PhoneCall className="w-3.5 h-3.5" />
+              <span>Test Disqualification</span>
+            </button>
+          </div>
+
+          {/* Card 3: Missing Original Deeds */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between space-y-3 border-t-4 border-t-rose-500">
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                Missing Deeds ('Nahi')
+              </span>
+              <h3 className="font-bold text-slate-900 text-sm">Unavailable Deeds</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Customer responds 'Nahi' or only has photocopies. Physical originals required; immediate polite decline.
+              </p>
+            </div>
+            <button
+              onClick={onStartCall}
+              className="w-full py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+            >
+              <PhoneCall className="w-3.5 h-3.5" />
+              <span>Test 'Nahi' Deeds</span>
+            </button>
+          </div>
+
+          {/* Card 4: Specialist Transfer */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between space-y-3 border-t-4 border-t-purple-500">
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                Specialist Routing
+              </span>
+              <h3 className="font-bold text-slate-900 text-sm">Existing Mortgage Loan</h3>
+              <p className="text-xs text-slate-500 leading-relaxed">
+                Customer has a running loan or wants EMI reduction. Routed to Loan Transfer Specialist.
+              </p>
+            </div>
+            <button
+              onClick={onStartCall}
+              className="w-full py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
+            >
+              <PhoneCall className="w-3.5 h-3.5" />
+              <span>Test Specialist Flow</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* System Pipeline Architecture Diagram */}
+      <ArchitectureFlow />
 
       {/* Aggregate Local Test Stats Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">

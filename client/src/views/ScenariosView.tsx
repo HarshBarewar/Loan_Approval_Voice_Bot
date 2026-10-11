@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   FlaskConical,
   Play,
@@ -9,7 +9,11 @@ import {
   Bot,
   Layers,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Search,
+  Download,
+  Filter,
+  CheckCheck
 } from 'lucide-react';
 import { ScenarioDefinition, ScenarioResult } from '../types';
 import * as api from '../services/api';
@@ -22,6 +26,8 @@ export const ScenariosView: React.FC = () => {
   const [useLiveLLM, setUseLiveLLM] = useState<boolean>(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   useEffect(() => {
     loadScenarios();
@@ -66,9 +72,43 @@ export const ScenariosView: React.FC = () => {
     }
   };
 
+  const handleExportResults = () => {
+    const report = {
+      timestamp: new Date().toISOString(),
+      useLiveLLM,
+      totalScenarios: scenarios.length,
+      executedCount: completedResults.length,
+      passedCount,
+      passRate: `${passRate}%`,
+      results
+    };
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `home-credit-test-report-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const completedResults = Object.values(results);
   const passedCount = completedResults.filter(r => r.passed).length;
   const passRate = completedResults.length > 0 ? Math.round((passedCount / completedResults.length) * 100) : 0;
+  const avgTime = completedResults.length > 0 
+    ? Math.round(completedResults.reduce((acc, r) => acc + (r.executionTimeMs || 0), 0) / completedResults.length)
+    : 0;
+
+  const filteredScenarios = useMemo(() => {
+    return scenarios.filter(sc => {
+      const matchesCategory = selectedCategory === 'ALL' || sc.category === selectedCategory;
+      const matchesSearch = !searchQuery.trim() || 
+        sc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        sc.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        sc.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (sc.initialUtterance && sc.initialUtterance.toLowerCase().includes(searchQuery.toLowerCase()));
+      return matchesCategory && matchesSearch;
+    });
+  }, [scenarios, selectedCategory, searchQuery]);
 
   return (
     <div className="space-y-6">
@@ -80,11 +120,23 @@ export const ScenariosView: React.FC = () => {
             <h1 className="text-xl font-bold text-slate-900">Predefined Test Scenarios</h1>
           </div>
           <p className="text-xs text-slate-500 mt-1 max-w-xl">
-            Automated test cases covering all 16+ Home Credit qualification rules: agricultural land, missing deeds, cash income, tenure bounds, cap negotiations, out-of-order facts, and interruptions.
+            Automated test suite verifying all 16+ Home Credit qualification rules: agricultural land, missing deeds, cash income, tenure bounds, cap negotiations, out-of-order facts, and interruptions.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {/* Export Report if any run */}
+          {completedResults.length > 0 && (
+            <button
+              onClick={handleExportResults}
+              className="inline-flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs shadow-2xs transition-all cursor-pointer"
+              title="Download test results as JSON"
+            >
+              <Download className="w-3.5 h-3.5 text-slate-500" />
+              <span>Export Report</span>
+            </button>
+          )}
+
           {/* Live LLM Mode Toggle */}
           <label className="flex items-center space-x-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 cursor-pointer select-none">
             <input
@@ -118,7 +170,7 @@ export const ScenariosView: React.FC = () => {
 
       {/* Results Summary Bar */}
       {completedResults.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-2xs grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
           <div>
             <span className="text-[11px] text-slate-400 block font-semibold uppercase">Executed</span>
             <span className="text-xl font-bold text-slate-800">{completedResults.length} / {scenarios.length}</span>
@@ -135,12 +187,64 @@ export const ScenariosView: React.FC = () => {
             <span className="text-[11px] text-blue-600 block font-semibold uppercase">Pass Rate</span>
             <span className="text-xl font-bold text-blue-700">{passRate}%</span>
           </div>
+          <div>
+            <span className="text-[11px] text-slate-500 block font-semibold uppercase">Avg Latency</span>
+            <span className="text-xl font-bold text-slate-700">{avgTime}ms</span>
+          </div>
         </div>
       )}
 
+      {/* Filter and Search Bar */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          {/* Category Tabs */}
+          <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-xs">
+            {[
+              { id: 'ALL', label: 'All Tests' },
+              { id: 'eligibility', label: 'Eligible Paths' },
+              { id: 'disqualification', label: 'Disqualifications' },
+              { id: 'transfer', label: 'Specialist Transfer' },
+              { id: 'dialogue', label: 'Dialogue Flow' },
+              { id: 'edge_case', label: 'Edge Cases' }
+            ].map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`px-3 py-1.5 rounded-lg font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                  selectedCategory === cat.id
+                    ? 'bg-slate-900 text-white font-semibold'
+                    : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-100'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Search Box */}
+          <div className="relative min-w-[220px]">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search scenarios..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-red-500 bg-slate-50 focus:bg-white"
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Scenarios Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {scenarios.map((sc) => {
+      {filteredScenarios.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-400 space-y-2">
+          <FlaskConical className="w-10 h-10 mx-auto text-slate-300 stroke-1" />
+          <p className="text-sm font-semibold text-slate-700">No scenarios match your search filter</p>
+          <p className="text-xs text-slate-400">Try adjusting your category selection or clear search keywords.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredScenarios.map((sc) => {
           const res = results[sc.id];
           const isRunning = runningId === sc.id;
           const isExpanded = expandedId === sc.id;
@@ -252,7 +356,9 @@ export const ScenariosView: React.FC = () => {
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
+

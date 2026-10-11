@@ -17,7 +17,13 @@ import {
   HelpCircle,
   ArrowRightLeft,
   User,
-  Bot
+  Bot,
+  Copy,
+  Check,
+  Download,
+  Flame,
+  Radio,
+  FileText
 } from 'lucide-react';
 import {
   ConversationState,
@@ -29,6 +35,8 @@ import * as api from '../services/api';
 import { saveConversation } from '../services/storage';
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition';
 import { useSpeechSynthesis } from '../hooks/useSpeechSynthesis';
+import { AudioWaveform } from '../components/AudioWaveform';
+import { EmiCalculatorWidget } from '../components/EmiCalculatorWidget';
 
 interface VoiceAgentViewProps {
   onConversationSaved?: () => void;
@@ -43,6 +51,8 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [callDuration, setCallDuration] = useState<number>(0);
+  const [activeMobileTab, setActiveMobileTab] = useState<'call' | 'criteria'>('call');
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<'en-IN' | 'hi-IN'>(() => {
     try {
       const saved = localStorage.getItem('preferred_language');
@@ -255,6 +265,76 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
     }
   };
 
+  const handleCopyMessage = (id: string, text: string) => {
+    try {
+      navigator.clipboard?.writeText(text);
+      setCopiedMsgId(id);
+      setTimeout(() => setCopiedMsgId(null), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleResetCall = () => {
+    speechSynth.stop();
+    speechRec.stopListening();
+    setConversationId(null);
+    setState(null);
+    setTranscript([]);
+    setCustomerInput('');
+    setCallDuration(0);
+    setErrorBanner(null);
+  };
+
+  const handleDownloadTranscript = () => {
+    if (transcript.length === 0) return;
+    const header = `HOME CREDIT INDIA - LOAN AGAINST PROPERTY (LAP) QUALIFICATION AUDIT\n` +
+      `Conversation ID: ${conversationId || 'N/A'}\n` +
+      `Date: ${new Date().toLocaleString()}\n` +
+      `Customer: ${state?.customerName || 'N/A'}\n` +
+      `Agent: ${state?.agentName || 'Priya (Home Credit)'}\n` +
+      `Language: ${selectedLanguage === 'hi-IN' ? 'Hindi (hi-IN)' : 'English (en-IN)'}\n` +
+      `Eligibility Status: ${state?.overallEligibility || 'PENDING'}\n` +
+      `Final Outcome: ${state?.finalOutcome || 'IN_PROGRESS'}\n` +
+      `Turn Count: ${state?.turnCount || transcript.length}\n` +
+      `================================================================================\n\n`;
+
+    const body = transcript.map(m => `[${new Date(m.timestamp).toLocaleTimeString()}] ${m.sender === 'agent' ? 'Priya (Home Credit)' : 'Customer'}: ${m.text}`).join('\n\n');
+    const blob = new Blob([header + body], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `HomeCredit_LAP_${conversationId || 'Transcript'}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const confirmedCount = state?.checklist ? [
+    state.checklist.propertyType.status === 'CAPTURED' || state.checklist.propertyType.status === 'CONFIRMED',
+    state.checklist.ownershipStatus.status === 'CAPTURED' || state.checklist.ownershipStatus.status === 'CONFIRMED',
+    state.checklist.originalDocuments.value === true,
+    state.checklist.desiredLoanAmount.status === 'CAPTURED' || state.checklist.desiredLoanAmount.status === 'CONFIRMED',
+    state.checklist.occupation.status !== 'UNKNOWN' && state.checklist.incomeMode.status !== 'UNKNOWN' && state.checklist.incomeMode.value === 'BANK',
+    state.checklist.marketValue.status === 'CAPTURED' || state.checklist.marketValue.status === 'CONFIRMED',
+    state.checklist.desiredTenureYears.status === 'CAPTURED' || state.checklist.desiredTenureYears.status === 'CONFIRMED'
+  ].filter(Boolean).length : 0;
+
+  const progressPercent = Math.round((confirmedCount / 7) * 100);
+
+  const getActiveQuestionIndex = (): number => {
+    if (!state || state.finalOutcome !== null) return 0;
+    if (state.checklist.propertyType.value === null) return 1;
+    if (state.checklist.ownershipStatus.value === null) return 2;
+    if (state.checklist.originalDocuments.value === null) return 3;
+    if (state.checklist.desiredLoanAmount.value === null) return 4;
+    if (state.checklist.occupation.value === null || state.checklist.incomeMode.value === null) return 5;
+    if (state.checklist.marketValue.value === null) return 6;
+    if (state.checklist.desiredTenureYears.value === null) return 7;
+    return 0;
+  };
+
+  const activeQuestionIndex = getActiveQuestionIndex();
+
   const isCallActive = conversationId !== null && state?.finalOutcome === null;
 
   return (
@@ -275,12 +355,38 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
         </div>
       )}
 
+      {/* Mobile Segmented View Control (< 1024px) */}
+      <div className="grid grid-cols-2 p-1 rounded-xl bg-slate-200/90 border border-slate-300 lg:hidden text-xs font-bold gap-1 shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setActiveMobileTab('call')}
+          className={`py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+            activeMobileTab === 'call' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <PhoneCall className="w-3.5 h-3.5" />
+          <span>Live Call ({transcript.length})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveMobileTab('criteria')}
+          className={`py-2 rounded-lg transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
+            activeMobileTab === 'criteria' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <CheckCircle2 className="w-3.5 h-3.5 text-red-600" />
+          <span>7 Criteria Scorecard ({confirmedCount}/7)</span>
+        </button>
+      </div>
+
       {/* Two-Column Responsive Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* ========================================================= */}
         {/* LEFT COLUMN: Conversation & Voice Controls (7 cols)       */}
         {/* ========================================================= */}
-        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col h-[750px] overflow-hidden">
+        <div className={`lg:col-span-7 bg-white border border-slate-200 rounded-2xl shadow-sm flex-col h-[750px] overflow-hidden ${
+          activeMobileTab === 'call' ? 'flex' : 'hidden lg:flex'
+        }`}>
           {/* Call Header */}
           <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
             <div className="flex items-center space-x-3">
@@ -324,6 +430,16 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
               </div>
             </div>
 
+            {/* Center Audio Activity Waveform */}
+            <div className="hidden xl:flex items-center justify-center">
+              <AudioWaveform
+                isActive={isCallActive}
+                isListening={speechRec.isListening}
+                isSpeaking={speechSynth.isSpeaking}
+                audioLevel={speechRec.audioLevel}
+              />
+            </div>
+
             {/* Call Control & Language Buttons */}
             <div className="flex items-center space-x-2">
               {/* Language Selection: English / हिन्दी */}
@@ -353,6 +469,27 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                   <span>🇮🇳 हिन्दी</span>
                 </button>
               </div>
+
+              {/* Download Audit Transcript */}
+              <button
+                type="button"
+                onClick={handleDownloadTranscript}
+                disabled={transcript.length === 0}
+                className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 disabled:opacity-30 transition-all cursor-pointer shadow-2xs"
+                title="Download Conversation Audit Transcript (.txt)"
+              >
+                <Download className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Reset Conversation */}
+              <button
+                type="button"
+                onClick={handleResetCall}
+                className="p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 transition-all cursor-pointer shadow-2xs"
+                title="Reset conversation state"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
 
               {!isCallActive ? (
                 <button
@@ -428,9 +565,35 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                           <span className={`text-[11px] font-semibold ${isAgent ? 'text-red-700' : 'text-blue-100'}`}>
                             {isAgent ? 'Priya (Home Credit)' : 'Customer (You)'}
                           </span>
-                          <span className={`text-[10px] ${isAgent ? 'text-slate-400' : 'text-blue-200'}`}>
-                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                          </span>
+                          <div className="flex items-center space-x-1.5">
+                            <span className={`text-[10px] ${isAgent ? 'text-slate-400' : 'text-blue-200'}`}>
+                              {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </span>
+                            {isAgent && (
+                              <button
+                                type="button"
+                                onClick={() => speechSynth.speak(msg.text, selectedLanguage)}
+                                className="text-slate-400 hover:text-red-600 p-0.5 rounded cursor-pointer transition-colors"
+                                title="Speak this response aloud"
+                              >
+                                <Volume2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleCopyMessage(msg.id, msg.text)}
+                              className={`p-0.5 rounded cursor-pointer transition-colors ${
+                                isAgent ? 'text-slate-400 hover:text-slate-700' : 'text-blue-200 hover:text-white'
+                              }`}
+                              title="Copy message text"
+                            >
+                              {copiedMsgId === msg.id ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
                         </div>
                         <p className="whitespace-pre-wrap">{msg.text}</p>
                       </div>
@@ -807,7 +970,9 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
         {/* ========================================================= */}
         {/* RIGHT COLUMN: Qualification State & Checklist (5 cols)   */}
         {/* ========================================================= */}
-        <div className="lg:col-span-5 space-y-4">
+        <div className={`lg:col-span-5 space-y-4 ${
+          activeMobileTab === 'criteria' ? 'block' : 'hidden lg:block'
+        }`}>
           {/* Overall Preliminary Eligibility Card */}
           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
@@ -894,6 +1059,23 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
               <span className="text-xs text-slate-400">Strict Enforcement</span>
             </div>
 
+            {/* Qualification Progress Bar */}
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-slate-700 flex items-center space-x-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-red-600" />
+                  <span>Qualification Progress</span>
+                </span>
+                <span className="font-bold text-slate-900">{confirmedCount} of 7 Confirmed ({progressPercent}%)</span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200">
+                <div
+                  className="h-full bg-gradient-to-r from-red-500 via-rose-500 to-emerald-500 transition-all duration-500 rounded-full"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+
             <div className="space-y-3">
               {/* 1. Property Type */}
               <ChecklistItem
@@ -902,6 +1084,7 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                 value={state?.checklist.propertyType.value || null}
                 status={state?.checklist.propertyType.status || 'UNKNOWN'}
                 ruleDescription="Residential, Commercial, Industrial. (Agricultural is disqualified)"
+                isActiveQuestion={activeQuestionIndex === 1}
               />
 
               {/* 2. Ownership Status */}
@@ -911,6 +1094,7 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                 value={state?.checklist.ownershipStatus.value || null}
                 status={state?.checklist.ownershipStatus.status || 'UNKNOWN'}
                 ruleDescription="Sole ownership and Joint ownership are both eligible"
+                isActiveQuestion={activeQuestionIndex === 2}
               />
 
               {/* 3. Original Documents */}
@@ -926,6 +1110,7 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                 }
                 status={state?.checklist.originalDocuments.status || 'UNKNOWN'}
                 ruleDescription="Original title deeds mandatory for physical verification"
+                isActiveQuestion={activeQuestionIndex === 3}
               />
 
               {/* 4. Desired Loan Amount */}
@@ -939,6 +1124,7 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                 }
                 status={state?.checklist.desiredLoanAmount.status || 'UNKNOWN'}
                 ruleDescription="Maximum cap ₹75,00,000 (₹75 Lakhs)"
+                isActiveQuestion={activeQuestionIndex === 4}
               />
 
               {/* 5. Occupation & Income Mode */}
@@ -958,6 +1144,7 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                     : 'UNKNOWN'
                 }
                 ruleDescription="Salaried / Self-employed. Income must be via Bank (Cash fails)"
+                isActiveQuestion={activeQuestionIndex === 5}
               />
 
               {/* 6. Property Market Value */}
@@ -971,6 +1158,7 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                 }
                 status={state?.checklist.marketValue.status || 'UNKNOWN'}
                 ruleDescription="Estimated market value (No arbitrary minimum threshold)"
+                isActiveQuestion={activeQuestionIndex === 6}
               />
 
               {/* 7. Desired Tenure */}
@@ -984,8 +1172,15 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                 }
                 status={state?.checklist.desiredTenureYears.status || 'UNKNOWN'}
                 ruleDescription="Must be between 3 and 15 years inclusive"
+                isActiveQuestion={activeQuestionIndex === 7}
               />
             </div>
+
+            {/* Indicative LAP Financial EMI Calculator Widget */}
+            <EmiCalculatorWidget
+              loanAmount={state?.checklist.desiredLoanAmount.value || null}
+              tenureYears={state?.checklist.desiredTenureYears.value || null}
+            />
           </div>
         </div>
       </div>
@@ -999,6 +1194,7 @@ interface ChecklistItemProps {
   value: string | null;
   status: string;
   ruleDescription: string;
+  isActiveQuestion?: boolean;
 }
 
 const ChecklistItem: React.FC<ChecklistItemProps> = ({
@@ -1006,24 +1202,38 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
   label,
   value,
   status,
-  ruleDescription
+  ruleDescription,
+  isActiveQuestion = false
 }) => {
   const isConfirmed = status === 'CONFIRMED' || status === 'CAPTURED';
   const isFailed = status === 'FAILED';
 
   return (
-    <div className="p-3 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 transition-colors">
+    <div className={`p-3.5 rounded-xl border transition-all duration-200 ${
+      isActiveQuestion
+        ? 'border-blue-400 bg-blue-50/50 ring-2 ring-blue-100 shadow-xs'
+        : isFailed
+        ? 'border-rose-200 bg-rose-50/40'
+        : isConfirmed
+        ? 'border-emerald-200 bg-emerald-50/30'
+        : 'border-slate-200/80 bg-slate-50/60 hover:bg-slate-50'
+    }`}>
       <div className="flex items-start justify-between">
         <div className="space-y-0.5">
           <div className="flex items-center space-x-1.5">
             <span className="text-[10px] font-bold text-slate-400 w-4">{index}.</span>
-            <span className="text-xs font-semibold text-slate-800">{label}</span>
+            <span className={`text-xs font-bold ${isActiveQuestion ? 'text-blue-900' : 'text-slate-800'}`}>{label}</span>
+            {isActiveQuestion && (
+              <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-blue-100 text-blue-700 animate-pulse">
+                Evaluating Now
+              </span>
+            )}
           </div>
-          <p className="text-[11px] text-slate-400 pl-5">{ruleDescription}</p>
+          <p className="text-[11px] text-slate-400 pl-5 leading-tight">{ruleDescription}</p>
         </div>
 
         <span
-          className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+          className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center space-x-1 ${
             isFailed
               ? 'bg-rose-100 text-rose-800 border border-rose-200'
               : isConfirmed
@@ -1031,13 +1241,20 @@ const ChecklistItem: React.FC<ChecklistItemProps> = ({
               : 'bg-slate-200 text-slate-600'
           }`}
         >
-          {status}
+          {isConfirmed ? (
+            <CheckCircle2 className="w-3 h-3 text-emerald-700 inline mr-0.5" />
+          ) : isFailed ? (
+            <XCircle className="w-3 h-3 text-rose-700 inline mr-0.5" />
+          ) : (
+            <Clock className="w-3 h-3 text-slate-500 inline mr-0.5" />
+          )}
+          <span>{status}</span>
         </span>
       </div>
 
       <div className="mt-2 pl-5 flex items-center justify-between text-xs">
-        <span className="font-semibold text-slate-700">
-          {value ? value : <span className="text-slate-400 italic">Not yet captured</span>}
+        <span className="font-semibold text-slate-800">
+          {value ? value : <span className="text-slate-400 font-normal italic">Pending customer answer</span>}
         </span>
       </div>
     </div>
