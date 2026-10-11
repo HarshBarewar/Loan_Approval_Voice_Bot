@@ -403,7 +403,7 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
               <div>
                 <div className="flex items-center space-x-2">
                   <span className="font-bold text-slate-800 text-sm whitespace-nowrap">
-                    {selectedLanguage === 'hi-IN' ? 'Priya — Home Credit LAP Agent' : 'George — Home Credit LAP Agent'}
+                    {selectedLanguage === 'hi-IN' ? 'Priya' : 'George'}
                   </span>
                   <span className="text-[10px] px-2.5 py-0.5 rounded-full font-semibold uppercase tracking-wider bg-slate-200 text-slate-700 whitespace-nowrap shrink-0">
                     {state?.stage ? state.stage.replace(/_/g, ' ') : 'IDLE'}
