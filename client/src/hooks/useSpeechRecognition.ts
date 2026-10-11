@@ -28,20 +28,30 @@ export function useSpeechRecognition({
 }: UseSpeechRecognitionOptions = {}) {
   const [isSupported, setIsSupported] = useState<boolean>(false);
   const [isListening, setIsListening] = useState<boolean>(false);
+  const [currentLang, setCurrentLang] = useState<string>(lang);
   const [transcript, setTranscript] = useState<string>('');
   const [interimTranscript, setInterimTranscript] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [permissionState, setPermissionState] = useState<'prompt' | 'granted' | 'denied' | 'unsupported'>('prompt');
   const [audioLevel, setAudioLevel] = useState<number>(0);
 
-  // Keep callback references stable to prevent unnecessary re-initializations
+  // Keep callback and language references stable
   const onResultRef = useRef(onResult);
   const onErrorRef = useRef(onError);
+  const langRef = useRef<string>(lang);
   const isListeningRef = useRef<boolean>(false);
   const recognitionRef = useRef<any>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const animFrameRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setCurrentLang(lang);
+    langRef.current = lang;
+    if (recognitionRef.current) {
+      recognitionRef.current.lang = lang;
+    }
+  }, [lang]);
 
   useEffect(() => {
     onResultRef.current = onResult;
@@ -187,7 +197,7 @@ export function useSpeechRecognition({
       recognition.continuous = true; // Stay listening until stopped or speech recognized
       recognition.interimResults = true; // Stream interim text so user sees real-time transcription
       recognition.maxAlternatives = 1;
-      recognition.lang = lang;
+      recognition.lang = langRef.current || currentLang || lang;
 
       recognition.onstart = () => {
         isListeningRef.current = true;
@@ -307,6 +317,14 @@ export function useSpeechRecognition({
   return {
     isSupported,
     isListening,
+    currentLang,
+    setLang: (newLang: string) => {
+      setCurrentLang(newLang);
+      langRef.current = newLang;
+      if (recognitionRef.current) {
+        recognitionRef.current.lang = newLang;
+      }
+    },
     transcript,
     setTranscript,
     interimTranscript,

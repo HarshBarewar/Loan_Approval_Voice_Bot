@@ -81,7 +81,10 @@ export class ConversationOrchestrator {
       currentState.stage === ConversationStage.DECLINED ||
       currentState.finalOutcome !== null
     ) {
-      const responseText = 'This conversation has already concluded. Please start a new conversation to begin a new qualification check.';
+      const isHindi = currentState.language === 'hi-IN';
+      const responseText = isHindi
+        ? 'यह बातचीत समाप्त हो चुकी है। नई पात्रता जांच शुरू करने के लिए कृपया एक नई कॉल शुरू करें।'
+        : 'This conversation has already concluded. Please start a new conversation to begin a new qualification check.';
       return {
         conversationId: currentState.conversationId,
         assistantResponse: responseText,
@@ -133,7 +136,8 @@ export class ConversationOrchestrator {
         const llmResult = await this.openRouterService.extractAndRespond(
           this.systemPrompt,
           historyForLLM,
-          trimmedMessage
+          trimmedMessage,
+          currentState.language || 'en-IN'
         );
 
         usedLLM = true;
@@ -169,9 +173,13 @@ export class ConversationOrchestrator {
     }
 
     // 5. Special Edge Cases:
+    const isHindi = currentState.language === 'hi-IN';
+
     // A. Ambiguous Documents: "The documents should be somewhere"
     if (NLPExtractor.isAmbiguousDocuments(trimmedMessage) && mergedFacts.originalDocuments === undefined) {
-      const response = 'To qualify, original title deeds must be readily available for physical verification. Could you confirm whether the original documents can be provided?';
+      const response = isHindi
+        ? 'पात्र होने के लिए सत्यापन हेतु मूल संपत्ति दस्तावेज़ (ओरिजिनल पेपर्स) उपलब्ध होने चाहिए। क्या आप पुष्टि कर सकते हैं कि मूल दस्तावेज़ उपलब्ध कराए जा सकते हैं?'
+        : 'To qualify, original title deeds must be readily available for physical verification. Could you confirm whether the original documents can be provided?';
       const agentTurn: TranscriptMessage = {
         id: `msg-${Date.now()}-agent`,
         conversationId: currentState.conversationId,
@@ -198,8 +206,10 @@ export class ConversationOrchestrator {
 
     // B. Interest Rate Diversion Question
     if (NLPExtractor.isInterestRateQuestion(trimmedMessage)) {
-      const nextQ = RuleEvaluator.getNextMissingQuestion(currentState.checklist) || '';
-      const response = `Our interest rates are tailored to each property profile. A senior loan expert will provide the exact rate and terms after preliminary qualification. ${nextQ}`;
+      const nextQ = RuleEvaluator.getNextMissingQuestion(currentState.checklist, currentState.language || 'en-IN') || '';
+      const response = isHindi
+        ? `हमारी ब्याज दरें प्रत्येक संपत्ति प्रोफाइल के अनुसार तय होती हैं। प्रारंभिक पात्रता के बाद हमारे वरिष्ठ लोन विशेषज्ञ आपको सटीक ब्याज दर और शर्तें बताएंगे। ${nextQ}`
+        : `Our interest rates are tailored to each property profile. A senior loan expert will provide the exact rate and terms after preliminary qualification. ${nextQ}`;
       const agentTurn: TranscriptMessage = {
         id: `msg-${Date.now()}-agent`,
         conversationId: currentState.conversationId,
@@ -226,8 +236,10 @@ export class ConversationOrchestrator {
 
     // C. Unrelated Question
     if (NLPExtractor.isUnrelatedQuestion(trimmedMessage)) {
-      const nextQ = RuleEvaluator.getNextMissingQuestion(currentState.checklist) || '';
-      const response = `I am an AI assistant with Home Credit calling regarding your pre-approved Loan Against Property offer. ${nextQ}`;
+      const nextQ = RuleEvaluator.getNextMissingQuestion(currentState.checklist, currentState.language || 'en-IN') || '';
+      const response = isHindi
+        ? `मैं होम क्रेडिट से एक एआई वॉयस असिस्टेंट हूँ, जो आपके प्री-अप्रूव्ड लोन अगेंस्ट प्रॉपर्टी ऑफर के संबंध में बात कर रही हूँ। ${nextQ}`
+        : `I am an AI assistant with Home Credit calling regarding your pre-approved Loan Against Property offer. ${nextQ}`;
       const agentTurn: TranscriptMessage = {
         id: `msg-${Date.now()}-agent`,
         conversationId: currentState.conversationId,
@@ -264,7 +276,12 @@ export class ConversationOrchestrator {
       !nextState.maxAmountCapOffered
     ) {
       nextState.maxAmountCapOffered = true;
-      const response = `Under this specific scheme, our maximum loan amount is ₹75 Lakhs. Would you like to proceed with ₹75 Lakhs instead?`;
+      const response = isHindi
+        ? 'इस विशेष योजना के तहत हमारी अधिकतम लोन राशि ₹75 लाख है। क्या आप ₹75 लाख के साथ आगे बढ़ना चाहेंगे?'
+        : 'Under this specific scheme, our maximum loan amount is ₹75 Lakhs. Would you like to proceed with ₹75 Lakhs instead?';
+      const capQuestion = isHindi
+        ? 'क्या आप ₹75 लाख के साथ आगे बढ़ना चाहेंगे?'
+        : 'Would you like to proceed with ₹75 Lakhs?';
       const agentTurn: TranscriptMessage = {
         id: `msg-${Date.now()}-agent`,
         conversationId: nextState.conversationId,
@@ -278,7 +295,7 @@ export class ConversationOrchestrator {
         assistantResponse: response,
         stage: nextState.stage,
         checklist: nextState.checklist,
-        nextMissingQuestion: 'Would you like to proceed with ₹75 Lakhs?',
+        nextMissingQuestion: capQuestion,
         overallEligibility: 'PENDING',
         finalOutcome: null,
         routingReason: null,
@@ -329,32 +346,68 @@ export class ConversationOrchestrator {
    * Deterministic conversational response generator aligned with strict rules
    */
   private generateResponse(state: ConversationState, llmSuggestion?: string | null): string {
+    const isHindi = state.language === 'hi-IN';
+
     // Stage-specific deterministic responses guarantees compliance with rules
     if (state.stage === ConversationStage.CALLBACK_REQUESTED) {
-      return `Thank you. I have recorded your callback preference for ${state.callbackTime || 'a convenient time'}. A Home Credit representative will connect with you then. Have a great day!`;
+      return isHindi
+        ? `धन्यवाद। मैंने ${state.callbackTime || 'सुविधाजनक समय'} के लिए आपका कॉलबैक अनुरोध दर्ज कर लिया है। होम क्रेडिट के प्रतिनिधि उस समय आपसे संपर्क करेंगे। आपका दिन शुभ हो!`
+        : `Thank you. I have recorded your callback preference for ${state.callbackTime || 'a convenient time'}. A Home Credit representative will connect with you then. Have a great day!`;
     }
 
     if (state.stage === ConversationStage.DECLINED) {
-      return 'I completely understand. Thank you for your time with Home Credit. Please reach out to us if your financing needs change in the future.';
+      return isHindi
+        ? 'मैं पूरी तरह समझती हूँ। होम क्रेडिट को समय देने के लिए धन्यवाद। भविष्य में यदि आपको वित्तीय सहायता की आवश्यकता हो, तो कृपया हमसे संपर्क करें।'
+        : 'I completely understand. Thank you for your time with Home Credit. Please reach out to us if your financing needs change in the future.';
     }
 
     if (state.stage === ConversationStage.TRANSFER_SPECIALIST_REQUIRED) {
-      return 'Since you have an existing loan on this property or are looking for an EMI reduction, our Loan Transfer Specialist team will handle your request. A specialist is expected to contact you shortly.';
+      return isHindi
+        ? 'चूँकि आपकी संपत्ति पर पहले से लोन है या आप ईएमआई कम कराना चाहते हैं, इसलिए हमारी लोन ट्रांसफर स्पेशलिस्ट टीम आपके मामले को संभालेगी। हमारे विशेषज्ञ शीघ्र ही आपसे संपर्क करेंगे।'
+        : 'Since you have an existing loan on this property or are looking for an EMI reduction, our Loan Transfer Specialist team will handle your request. A specialist is expected to contact you shortly.';
     }
 
     if (state.finalOutcome === FinalOutcome.MAXIMUM_AMOUNT_NOT_ACCEPTED) {
-      return 'Understood. Since ₹75 Lakhs does not meet your requirements, we cannot proceed with this specific offer today. Thank you for your time with Home Credit.';
+      return isHindi
+        ? 'समझ गई। चूँकि 75 लाख रुपये आपकी आवश्यकता पूरी नहीं करते, इसलिए हम आज इस विशेष ऑफर के साथ आगे नहीं बढ़ सकते। होम क्रेडिट को समय देने के लिए धन्यवाद।'
+        : 'Understood. Since ₹75 Lakhs does not meet your requirements, we cannot proceed with this specific offer today. Thank you for your time with Home Credit.';
     }
 
     if (state.stage === ConversationStage.DISQUALIFIED) {
+      if (isHindi) {
+        let reasonHindi = 'पात्रता शर्तें पूरी न होने के कारण';
+        const reasonLower = (state.disqualificationReason || '').toLowerCase();
+        if (reasonLower.includes('agricultural')) {
+          reasonHindi = 'कृषि भूमि इस योजना के तहत मान्य नहीं है, केवल आवासीय, व्यावसायिक या औद्योगिक संपत्ति स्वीकार्य है';
+        } else if (reasonLower.includes('original')) {
+          reasonHindi = 'सत्यापन के लिए मूल दस्तावेज़ (ओरिजिनल पेपर्स) होना अनिवार्य है';
+        } else if (reasonLower.includes('cash')) {
+          reasonHindi = 'मासिक आय बैंक खाते में प्राप्त होना अनिवार्य है';
+        } else if (reasonLower.includes('tenure')) {
+          reasonHindi = 'लोन अवधि 3 से 15 वर्ष के बीच होना अनिवार्य है';
+        }
+        return `विवरण साझा करने के लिए धन्यवाद। खेद है कि हमारी नीति के अनुसार (${reasonHindi}), हम आज इस लोन ऑफर के साथ आगे नहीं बढ़ सकते।`;
+      }
       return `Thank you for sharing the details. Unfortunately, based on our policy criteria (${state.disqualificationReason || 'criteria not met'}), we cannot proceed with this loan offer today.`;
     }
 
     if (state.stage === ConversationStage.QUALIFIED_FOR_HUMAN_HANDOFF) {
-      return 'Congratulations! You have completed the preliminary qualification for our Home Credit Loan Against Property. A senior loan expert will contact you shortly to discuss personalized interest rates and documentation.';
+      return isHindi
+        ? 'बधाई हो! आपने हमारे होम क्रेडिट लोन अगेंस्ट प्रॉपर्टी के लिए सभी प्रारंभिक पात्रता शर्तें पूरी कर ली हैं। हमारे वरिष्ठ लोन विशेषज्ञ आपसे व्यक्तिगत ब्याज दरों और दस्तावेज़ीकरण के लिए शीघ्र संपर्क करेंगे।'
+        : 'Congratulations! You have completed the preliminary qualification for our Home Credit Loan Against Property. A senior loan expert will contact you shortly to discuss personalized interest rates and documentation.';
     }
 
-    // Ongoing qualification: if LLM gave an appropriate concise question that aligns with nextMissingQuestion, use it!
+    // Ongoing qualification:
+    // If language is Hindi, verify the LLM suggestion is actually in Hindi Devanagari script
+    if (isHindi) {
+      const containsDevanagari = llmSuggestion && /[\u0900-\u097F]/.test(llmSuggestion);
+      if (containsDevanagari && state.nextMissingQuestion && llmSuggestion!.includes('?')) {
+        return llmSuggestion!;
+      }
+      return state.nextMissingQuestion || 'धन्यवाद। मैं अगले विवरण की जाँच करती हूँ।';
+    }
+
+    // English ongoing qualification
     if (llmSuggestion && state.nextMissingQuestion && llmSuggestion.includes('?')) {
       return llmSuggestion;
     }

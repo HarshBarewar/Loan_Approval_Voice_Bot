@@ -184,7 +184,7 @@ export class RuleEvaluator {
     }
 
     // 9. Determine Next Missing Question across the 7 checklist items
-    const nextMissing = this.getNextMissingQuestion(checklist);
+    const nextMissing = this.getNextMissingQuestion(checklist, state.language || 'en-IN');
 
     // 10. Check if All 7 Items are Confirmed/Captured and Valid
     const all7Completed =
@@ -234,33 +234,53 @@ export class RuleEvaluator {
   /**
    * Identifies the earliest unanswered checklist item in prescribed order
    */
-  public static getNextMissingQuestion(checklist: ConversationState['checklist']): string | null {
+  public static getNextMissingQuestion(checklist: ConversationState['checklist'], language: 'en-IN' | 'hi-IN' = 'en-IN'): string | null {
+    const isHindi = language === 'hi-IN';
+
     if (checklist.propertyType.value === null) {
-      return 'What type of property do you own (Residential, Commercial, or Industrial)?';
+      return isHindi
+        ? 'आपकी संपत्ति किस प्रकार की है — आवासीय (रेजिडेंशियल), व्यावसायिक (कमर्शियल) या औद्योगिक (इंडस्ट्रियल)?'
+        : 'What type of property do you own (Residential, Commercial, or Industrial)?';
     }
     if (checklist.ownershipStatus.value === null) {
-      return 'Is the property solely in your name, or is it jointly owned?';
+      return isHindi
+        ? 'क्या यह संपत्ति केवल आपके नाम पर है, या संयुक्त (जॉइंट) स्वामित्व में है?'
+        : 'Is the property solely in your name, or is it jointly owned?';
     }
     if (checklist.originalDocuments.value === null) {
-      return 'Are the original title documents and property deeds available for physical verification?';
+      return isHindi
+        ? 'क्या सत्यापन के लिए संपत्ति के मूल दस्तावेज़ (ओरिजिनल पेपर्स) उपलब्ध हैं?'
+        : 'Are the original title documents and property deeds available for physical verification?';
     }
     if (checklist.desiredLoanAmount.value === null) {
-      return 'What is the loan amount you are looking for? (Up to ₹75 Lakhs)';
+      return isHindi
+        ? 'आपको कितने रुपये के लोन की आवश्यकता है? (अधिकतम 75 लाख रुपये तक)'
+        : 'What is the loan amount you are looking for? (Up to ₹75 Lakhs)';
     }
     if (checklist.occupation.value === null || checklist.incomeMode.value === null) {
       if (checklist.occupation.value === null && checklist.incomeMode.value === null) {
-        return 'What is your current occupation, and is your monthly income received through a bank account?';
+        return isHindi
+          ? 'आपका व्यवसाय क्या है, और क्या आपकी मासिक आय बैंक खाते में आती है?'
+          : 'What is your current occupation, and is your monthly income received through a bank account?';
       }
       if (checklist.occupation.value === null) {
-        return 'Are you currently salaried or self-employed?';
+        return isHindi
+          ? 'क्या आप नौकरीपेशा (सैलरीड) हैं या अपना व्यवसाय (सेल्फ-एम्प्लॉयड) करते हैं?'
+          : 'Are you currently salaried or self-employed?';
       }
-      return 'Do you receive your income through a bank account or in cash?';
+      return isHindi
+        ? 'क्या आपकी मासिक आय बैंक खाते में आती है या नकद (कैश) में?'
+        : 'Do you receive your income through a bank account or in cash?';
     }
     if (checklist.marketValue.value === null) {
-      return 'What is your estimated current market value of the property?';
+      return isHindi
+        ? 'आपकी संपत्ति का अनुमानित वर्तमान बाज़ार मूल्य कितना है?'
+        : 'What is your estimated current market value of the property?';
     }
     if (checklist.desiredTenureYears.value === null) {
-      return 'What repayment tenure would you prefer, between 3 and 15 years?';
+      return isHindi
+        ? 'आप 3 से 15 साल के बीच कितने समय के लिए लोन लेना चाहेंगे?'
+        : 'What repayment tenure would you prefer, between 3 and 15 years?';
     }
     return null;
   }

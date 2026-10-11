@@ -78,16 +78,21 @@ export function createApiRouter(
    * Create New Conversation
    */
   router.post('/conversations', (req: Request, res: Response) => {
-    const { customerName, agentName } = req.body || {};
+    const { customerName, agentName, language } = req.body || {};
+    const selectedLang: 'en-IN' | 'hi-IN' = language === 'hi-IN' ? 'hi-IN' : 'en-IN';
     const conversationId = `conv-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const state = StateMachine.createInitialState(
       conversationId,
-      customerName || 'Customer',
-      agentName || 'Priya (Home Credit)'
+      customerName || (selectedLang === 'hi-IN' ? 'श्री शर्मा' : 'Mr. Sharma'),
+      agentName || (selectedLang === 'hi-IN' ? 'प्रिया (होम क्रेडिट)' : 'Priya (Home Credit)'),
+      selectedLang
     );
 
-    // Initial Greeting Message from Agent
-    const initialGreeting = `Hello! Am I speaking with the property owner? This is ${state.agentName} regarding your pre-approved Home Credit Loan Against Property offer of up to ₹75 Lakhs. Do you have a moment?`;
+    // Initial Greeting Message from Agent (Localized)
+    const initialGreeting = selectedLang === 'hi-IN'
+      ? `नमस्ते! क्या मेरी बात संपत्ति के मालिक से हो रही है? मैं होम क्रेडिट से प्रिया बोल रही हूँ, आपके ₹75 लाख तक के प्री-अप्रूव्ड लोन अगेंस्ट प्रॉपर्टी ऑफर के संबंध में। क्या आपके पास बात करने के लिए दो मिनट का समय है?`
+      : `Hello! Am I speaking with the property owner? This is ${state.agentName} regarding your pre-approved Home Credit Loan Against Property offer of up to ₹75 Lakhs. Do you have a moment?`;
+
     const initialAgentMsg: TranscriptMessage = {
       id: `msg-${Date.now()}-init`,
       conversationId,
@@ -142,7 +147,7 @@ export function createApiRouter(
    * Send Message to Conversation
    */
   router.post('/conversations/:id/messages', async (req: Request, res: Response) => {
-    const { message, forceScripted } = req.body;
+    const { message, forceScripted, language } = req.body;
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({ error: 'Message text is required' });
     }
@@ -150,6 +155,11 @@ export function createApiRouter(
     const session = conversationsStore.get(req.params.id);
     if (!session) {
       return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    // Sync session language if requested dynamically by client
+    if (language === 'hi-IN' || language === 'en-IN') {
+      session.state.language = language;
     }
 
     try {

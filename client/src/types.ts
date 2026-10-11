@@ -57,6 +57,7 @@ export interface ConversationState {
   stage: ConversationStage;
   customerName: string;
   agentName: string;
+  language?: 'en-IN' | 'hi-IN';
   isCustomerVerified: boolean;
   isCustomerAvailable: boolean;
   isOfferAccepted: boolean | null;

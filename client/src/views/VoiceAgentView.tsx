@@ -43,11 +43,19 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [callDuration, setCallDuration] = useState<number>(0);
+  const [selectedLanguage, setSelectedLanguage] = useState<'en-IN' | 'hi-IN'>(() => {
+    try {
+      const saved = localStorage.getItem('preferred_language');
+      return saved === 'hi-IN' ? 'hi-IN' : 'en-IN';
+    } catch {
+      return 'en-IN';
+    }
+  });
 
   // Audio Hooks
-  const speechSynth = useSpeechSynthesis(1.0, false);
+  const speechSynth = useSpeechSynthesis(1.0, false, selectedLanguage);
   const speechRec = useSpeechRecognition({
-    lang: 'en-IN',
+    lang: selectedLanguage,
     onResult: (text) => {
       // Put recognized speech into input preview for user review / editing
       setCustomerInput(text);
@@ -56,6 +64,20 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
       setErrorBanner(err);
     }
   });
+
+  const handleLanguageChange = (newLang: 'en-IN' | 'hi-IN') => {
+    setSelectedLanguage(newLang);
+    try {
+      localStorage.setItem('preferred_language', newLang);
+    } catch {
+      // ignore
+    }
+    speechRec.setLang(newLang);
+    speechSynth.setLanguage(newLang);
+    if (state) {
+      setState({ ...state, language: newLang });
+    }
+  };
 
   const transcriptEndRef = useRef<HTMLDivElement>(null);
 
@@ -90,7 +112,9 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
       speechSynth.stop();
       speechRec.stopListening();
 
-      const session = await api.createConversation('Mr. Sharma', 'Priya (Home Credit)');
+      const customerName = selectedLanguage === 'hi-IN' ? 'श्री शर्मा' : 'Mr. Sharma';
+      const agentName = selectedLanguage === 'hi-IN' ? 'प्रिया (होम क्रेडिट)' : 'Priya (Home Credit)';
+      const session = await api.createConversation(customerName, agentName, selectedLanguage);
       setConversationId(session.conversationId);
       setState(session.state);
       setTranscript(session.transcript);
@@ -99,7 +123,7 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
 
       // Vocalize initial greeting if synthesis enabled
       if (!speechSynth.isMuted) {
-        speechSynth.speak(session.initialMessage);
+        speechSynth.speak(session.initialMessage, selectedLanguage);
       }
     } catch (err: any) {
       setErrorBanner(`Failed to start conversation: ${err.message}`);
@@ -159,7 +183,7 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
     speechRec.resetTranscript();
 
     try {
-      const response = await api.sendMessage(conversationId, text, false);
+      const response = await api.sendMessage(conversationId, text, false, selectedLanguage);
 
       setState(response.state || {
         ...state!,
@@ -177,7 +201,7 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
 
       // Vocalize response aloud if TTS enabled
       if (!speechSynth.isMuted && response.assistantResponse) {
-        speechSynth.speak(response.assistantResponse);
+        speechSynth.speak(response.assistantResponse, selectedLanguage);
       }
 
       // Save updated state in localStorage
@@ -300,8 +324,36 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
               </div>
             </div>
 
-            {/* Call Control Buttons */}
+            {/* Call Control & Language Buttons */}
             <div className="flex items-center space-x-2">
+              {/* Language Selection: English / हिन्दी */}
+              <div className="flex items-center bg-slate-200/90 p-0.5 rounded-xl border border-slate-300 shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => handleLanguageChange('en-IN')}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    selectedLanguage === 'en-IN'
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Converse and listen in English"
+                >
+                  English
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleLanguageChange('hi-IN')}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
+                    selectedLanguage === 'hi-IN'
+                      ? 'bg-red-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Converse and listen in Hindi (हिंदी भाषा)"
+                >
+                  <span>🇮🇳 हिन्दी</span>
+                </button>
+              </div>
+
               {!isCallActive ? (
                 <button
                   onClick={handleStartCall}
@@ -601,10 +653,16 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                   }}
                   placeholder={
                     speechRec.isListening
-                      ? 'Listening to speech... (or type answer here)'
+                      ? selectedLanguage === 'hi-IN'
+                        ? 'आपकी आवाज़ सुन रहे हैं... (या यहाँ टाइप करें)'
+                        : 'Listening to speech... (or type answer here)'
                       : isCallActive
-                      ? 'Type your answer or click mic to speak...'
-                      : 'Start call to begin answering...'
+                      ? selectedLanguage === 'hi-IN'
+                        ? 'माइक दबाकर बोलें या उत्तर टाइप करें...'
+                        : 'Type your answer or click mic to speak...'
+                      : selectedLanguage === 'hi-IN'
+                        ? 'कॉल शुरू करें (Start Call) बातचीत के लिए...'
+                        : 'Start call to begin answering...'
                   }
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:bg-white transition-all pr-12"
                 />
@@ -617,6 +675,108 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                   <Send className="w-4 h-4" />
                 </button>
               </div>
+            </div>
+
+            {/* Quick Test Utterances Bar (Localized for active language) */}
+            <div className="pt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+              <span className="text-slate-400 font-semibold text-[10px] uppercase tracking-wider mr-1">
+                {selectedLanguage === 'hi-IN' ? 'त्वरित उत्तर:' : 'Quick Prompts:'}
+              </span>
+              {selectedLanguage === 'hi-IN' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerInput('आवासीय संपत्ति है, मुझे 50 लाख का लोन चाहिए'); }}
+                    className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    आवासीय, ₹50L लोन
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerInput('मूल दस्तावेज़ घर पर उपलब्ध हैं'); }}
+                    className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    मूल दस्तावेज़ उपलब्ध हैं
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerInput('नौकरीपेशा हूँ, वेतन बैंक खाते में आता है'); }}
+                    className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    नौकरी, बैंक वेतन
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerInput('संपत्ति का मूल्य 1 करोड़ है और 10 साल की अवधि चाहिए'); }}
+                    className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    मूल्य ₹1Cr, 10 साल
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerInput('यह खेती की ज़मीन है'); }}
+                    className="px-2 py-0.5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors cursor-pointer"
+                    title="Disqualification check"
+                  >
+                    खेती की ज़मीन
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerInput('इस प्रॉपर्टी पर पहले से होम लोन चल रहा है'); }}
+                    className="px-2 py-0.5 rounded-full bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-colors cursor-pointer"
+                    title="Specialist balance transfer check"
+                  >
+                    पहले से लोन है
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerInput('Residential property, I need 50 lakhs loan'); }}
+                    className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    Residential, ₹50L
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerInput('Yes, original deeds are available at home'); }}
+                    className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    Original docs available
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerInput('Salaried employee, income is in bank account'); }}
+                    className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    Salaried, Bank income
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerInput('Market value is 1 crore, tenure 10 years'); }}
+                    className="px-2 py-0.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors cursor-pointer"
+                  >
+                    Value ₹1Cr, 10 yrs
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerInput('It is agricultural farmland'); }}
+                    className="px-2 py-0.5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors cursor-pointer"
+                    title="Disqualification test"
+                  >
+                    Agricultural farm
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setCustomerInput('I already have an existing mortgage loan on this property'); }}
+                    className="px-2 py-0.5 rounded-full bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-colors cursor-pointer"
+                    title="Specialist balance transfer test"
+                  >
+                    Existing mortgage
+                  </button>
+                </>
+              )}
             </div>
 
             {/* Recognition Fallback Info Note */}

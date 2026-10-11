@@ -21,7 +21,8 @@ export class StateMachine {
   public static createInitialState(
     conversationId: string,
     customerName: string = 'Mr. Sharma',
-    agentName: string = 'Priya from Home Credit'
+    agentName: string = 'Priya from Home Credit',
+    language: 'en-IN' | 'hi-IN' = 'en-IN'
   ): ConversationState {
     const now = new Date().toISOString();
 
@@ -36,11 +37,14 @@ export class StateMachine {
       desiredTenureYears: { value: null, status: FieldStatus.UNKNOWN },
     };
 
+    const initialQuestion = RuleEvaluator.getNextMissingQuestion(emptyChecklist, language);
+
     return {
       conversationId,
       stage: ConversationStage.GREETING,
       customerName,
       agentName,
+      language,
       isCustomerVerified: false,
       isCustomerAvailable: true,
       isOfferAccepted: null,
@@ -54,7 +58,7 @@ export class StateMachine {
       disqualificationReason: null,
       finalOutcome: null,
       routingReason: null,
-      nextMissingQuestion: 'What type of property do you own (Residential, Commercial, or Industrial)?',
+      nextMissingQuestion: initialQuestion,
       turnCount: 0,
       startedAt: now,
       updatedAt: now,

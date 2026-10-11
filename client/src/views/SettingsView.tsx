@@ -47,7 +47,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [isLoadingModels, setIsLoadingModels] = useState<boolean>(false);
 
   // Audio preferences
-  const [language, setLanguage] = useState<string>('en-IN');
+  const [language, setLanguage] = useState<string>(() => {
+    try {
+      return localStorage.getItem('preferred_language') || 'en-IN';
+    } catch {
+      return 'en-IN';
+    }
+  });
   const [speechRate, setSpeechRate] = useState<number>(1.0);
   const [autoPlay, setAutoPlay] = useState<boolean>(true);
 
@@ -271,7 +277,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </div>
             <select
               value={language}
-              onChange={(e) => setLanguage(e.target.value)}
+              onChange={(e) => {
+                setLanguage(e.target.value);
+                try {
+                  localStorage.setItem('preferred_language', e.target.value);
+                } catch {
+                  // ignore
+                }
+              }}
               className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-medium cursor-pointer"
             >
               <option value="en-IN">English (India) — en-IN</option>

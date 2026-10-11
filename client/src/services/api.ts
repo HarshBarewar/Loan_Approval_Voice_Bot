@@ -38,7 +38,11 @@ export async function getAvailableModels(): Promise<Array<{ id: string; name: st
   return data.models || [];
 }
 
-export async function createConversation(customerName?: string, agentName?: string): Promise<{
+export async function createConversation(
+  customerName?: string,
+  agentName?: string,
+  language: 'en-IN' | 'hi-IN' = 'en-IN'
+): Promise<{
   conversationId: string;
   state: ConversationState;
   transcript: TranscriptMessage[];
@@ -47,7 +51,7 @@ export async function createConversation(customerName?: string, agentName?: stri
   const res = await fetch(`${API_BASE}/conversations`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ customerName, agentName })
+    body: JSON.stringify({ customerName, agentName, language })
   });
   if (!res.ok) throw new Error('Failed to initialize conversation');
   return res.json();
@@ -56,7 +60,8 @@ export async function createConversation(customerName?: string, agentName?: stri
 export async function sendMessage(
   conversationId: string,
   message: string,
-  forceScripted: boolean = false
+  forceScripted: boolean = false,
+  language?: 'en-IN' | 'hi-IN'
 ): Promise<{
   conversationId: string;
   assistantResponse: string;
@@ -77,7 +82,7 @@ export async function sendMessage(
   const res = await fetch(`${API_BASE}/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, forceScripted })
+    body: JSON.stringify({ message, forceScripted, language })
   });
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));

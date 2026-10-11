@@ -228,11 +228,21 @@ export class OpenRouterService {
   public async extractAndRespond(
     systemPrompt: string,
     conversationHistory: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
-    customerUtterance: string
+    customerUtterance: string,
+    language: 'en-IN' | 'hi-IN' = 'en-IN'
   ): Promise<LLMExtractionResult> {
     if (!this.apiKey || !this.apiKey.trim()) {
       throw new Error('OPENROUTER_API_KEY is not configured.');
     }
+
+    const languageInstruction = language === 'hi-IN'
+      ? `CRITICAL LANGUAGE REQUIREMENT (HIGHEST PRIORITY):
+The customer has selected HINDI (hi-IN) as their language.
+You MUST write "conversationalResponse" and "clarificationQuestion" STRICTLY, EXPLICITLY, AND ONLY in natural spoken Hindi using Devanagari script (हिंदी).
+DO NOT respond in English or Latin/Roman script. The agent must speak Hindi to the customer.
+Example conversationalResponse in Hindi: "जी बहुत बढ़िया। क्या इस आवासीय संपत्ति के मूल दस्तावेज़ आपके पास उपलब्ध हैं?"`
+      : `LANGUAGE REQUIREMENT:
+The customer has selected English (en-IN). Write "conversationalResponse" and "clarificationQuestion" in professional, polite Indian English.`;
 
     const schemaDescription = `
 You must respond ONLY with a valid JSON object strictly matching this schema:
@@ -260,11 +270,12 @@ You must respond ONLY with a valid JSON object strictly matching this schema:
   "conversationalResponse": string
 }
 CRITICAL RULES:
-1. Normalize Indian currency numbers (e.g., "50 lakhs" -> 5000000, "1 crore" -> 10000000).
+1. Normalize Indian currency numbers (e.g., "50 lakhs" -> 5000000, "1 crore" -> 10000000, "पचास लाख" -> 5000000, "एक करोड़" -> 10000000).
 2. Extract multiple facts if the customer provided them in one go.
 3. If customer corrects an answer, extract the new value.
-4. conversationalResponse must be concise (1 to 2 sentences max) suitable for text-to-speech.
+4. conversationalResponse must be concise (1 to 2 sentences max) suitable for text-to-speech vocalization.
 5. Do not invent interest rates or loan approvals.
+${languageInstruction}
 `;
 
     const messages = [
