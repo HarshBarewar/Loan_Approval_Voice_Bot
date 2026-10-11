@@ -4,7 +4,8 @@
 
 import { ConversationState, ScenarioDefinition, ScenarioResult, TranscriptMessage } from '../types';
 
-export const API_BASE = '/api';
+const envApiUrl = import.meta.env.VITE_API_URL;
+export const API_BASE = envApiUrl ? `${envApiUrl.replace(/\/$/, '')}/api` : '/api';
 
 export async function checkHealth() {
   const res = await fetch(`${API_BASE}/health`);

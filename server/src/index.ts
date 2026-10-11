@@ -50,8 +50,8 @@ app.use((err: any, _req: express.Request, res: express.Response, _next: express.
   });
 });
 
-// Start Server if not run in test environment
-if (process.env.NODE_ENV !== 'test') {
+// Start Server if not run in test environment or Vercel serverless function
+if (process.env.NODE_ENV !== 'test' && !process.env.VERCEL) {
   app.listen(PORT, () => {
     const config = openRouterService.getConfig();
     console.log(`=======================================================`);
