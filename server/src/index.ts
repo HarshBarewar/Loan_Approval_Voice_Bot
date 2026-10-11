@@ -28,18 +28,10 @@ app.use(express.json({ limit: '2mb' }));
 const openRouterService = new OpenRouterService();
 const orchestrator = new ConversationOrchestrator(openRouterService);
 
-// Mount API Router
-app.use('/api', createApiRouter(openRouterService, orchestrator));
-
-// Root info route
-app.get('/', (_req, res) => {
-  res.json({
-    name: 'Home Credit AI Voice Agent Server',
-    status: 'running',
-    version: '1.0.0',
-    documentation: '/api/health'
-  });
-});
+// Mount API Router on both /api and / for full compatibility with direct calls and serverless rewrites
+const apiRouter = createApiRouter(openRouterService, orchestrator);
+app.use('/api', apiRouter);
+app.use('/', apiRouter);
 
 // Central Error Handler
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
