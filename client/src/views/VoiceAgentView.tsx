@@ -59,6 +59,13 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
 
   const transcriptEndRef = useRef<HTMLDivElement>(null);
 
+  // Sync speech recognition error message to user banner
+  useEffect(() => {
+    if (speechRec.errorMessage) {
+      setErrorBanner(speechRec.errorMessage);
+    }
+  }, [speechRec.errorMessage]);
+
   // Call Duration Timer
   useEffect(() => {
     let interval: any;
@@ -192,16 +199,35 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
   };
 
   // Toggle Microphone
-  const handleToggleMic = () => {
+  const handleToggleMic = async () => {
     if (speechRec.isListening) {
       speechRec.stopListening();
+      if (customerInput.trim()) {
+        handleSendMessage(customerInput.trim());
+      }
     } else {
-      if (!conversationId) {
-        handleStartCall();
-        return;
+      let activeId = conversationId;
+      if (!activeId) {
+        try {
+          setIsProcessing(true);
+          setErrorBanner(null);
+          speechSynth.stop();
+          const session = await api.createConversation('Mr. Sharma', 'Priya (Home Credit)');
+          setConversationId(session.conversationId);
+          activeId = session.conversationId;
+          setState(session.state);
+          setTranscript(session.transcript);
+          setCallDuration(0);
+          setCustomerInput('');
+          setIsProcessing(false);
+        } catch (e: any) {
+          setErrorBanner(`Failed to start call: ${e.message}`);
+          setIsProcessing(false);
+          return;
+        }
       }
       speechSynth.stop();
-      speechRec.startListening();
+      await speechRec.startListening();
     }
   };
 
@@ -480,8 +506,54 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
 
           {/* User Input & Microphone Trigger Area */}
           <div className="p-4 bg-white border-t border-slate-200 space-y-2">
+            {/* Active Listening Indicator with Audio Level Meter */}
+            {speechRec.isListening && (
+              <div className="bg-red-50 border border-red-200 text-red-900 rounded-xl p-3 text-xs flex flex-wrap items-center justify-between shadow-xs gap-2">
+                <div className="flex items-center space-x-2">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+                  </span>
+                  <span className="font-semibold text-red-800">
+                    Listening to your voice... Speak now!
+                  </span>
+                  {speechRec.audioLevel > 0 && (
+                    <div className="flex items-center space-x-1 ml-2">
+                      <span className="text-[10px] text-red-600 font-mono">Mic:</span>
+                      <div className="w-14 bg-red-200 h-2 rounded-full overflow-hidden inline-block">
+                        <div
+                          className="bg-red-600 h-2 rounded-full transition-all duration-75"
+                          style={{ width: `${Math.min(100, Math.max(10, speechRec.audioLevel * 1.5))}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  {customerInput.trim() && (
+                    <button
+                      onClick={() => {
+                        speechRec.stopListening();
+                        handleSendMessage(customerInput.trim());
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-red-600 text-white font-semibold text-xs hover:bg-red-700 shadow-2xs cursor-pointer"
+                    >
+                      Done & Send
+                    </button>
+                  )}
+                  <button
+                    onClick={() => speechRec.stopListening()}
+                    className="text-red-700 hover:text-red-900 font-semibold text-xs px-2 py-1 cursor-pointer"
+                  >
+                    Stop
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Live speech preview if recognized and pending send */}
-            {speechRec.transcript && (
+            {speechRec.transcript && !speechRec.isListening && (
               <div className="text-xs bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg p-2 flex items-center justify-between">
                 <span>Recognized: <strong>"{speechRec.transcript}"</strong></span>
                 <span className="text-[10px] text-emerald-600 font-semibold">Ready to send</span>
@@ -492,17 +564,17 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
               {/* Prominent Microphone Button */}
               <button
                 onClick={handleToggleMic}
-                disabled={!speechRec.isSupported || isProcessing}
+                disabled={isProcessing}
                 className={`relative w-12 h-12 rounded-full flex items-center justify-center shrink-0 transition-all shadow-md active:scale-95 cursor-pointer ${
                   speechRec.isListening
                     ? 'bg-red-600 text-white ring-4 ring-red-200 animate-pulse'
                     : speechRec.isSupported
                     ? 'bg-slate-900 hover:bg-slate-800 text-white'
-                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    : 'bg-amber-600 hover:bg-amber-700 text-white'
                 }`}
                 title={
                   !speechRec.isSupported
-                    ? 'Speech recognition not supported in this browser; use manual text input.'
+                    ? 'Native speech recognition not supported in this browser; click to read instructions or use text input.'
                     : speechRec.isListening
                     ? 'Click to stop listening'
                     : 'Click to speak via microphone'
@@ -534,7 +606,6 @@ export const VoiceAgentView: React.FC<VoiceAgentViewProps> = ({ onConversationSa
                       ? 'Type your answer or click mic to speak...'
                       : 'Start call to begin answering...'
                   }
-                  disabled={!isCallActive && !conversationId}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:bg-white transition-all pr-12"
                 />
                 <button
