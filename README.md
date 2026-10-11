@@ -157,3 +157,5 @@ Detailed architectural and operational documentation is available in the [`docs/
 
 Developed for the Home Credit Loan Against Property (LAP) AI Voice Agent Qualification Assignment.
 All rights reserved.
+#   L o a n _ A p p r o v a l _ V o i c e _ B o t  
+ 
